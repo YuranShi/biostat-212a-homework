@@ -6,7 +6,7 @@ This repository contains homework assignments for BIOSTAT 212A (Winter 2025).
 
 | Homework   | QMD File                 | HTML File                  |
 |------------|--------------------------|----------------------------|
-| Homework 1 | [hw1.qmd](./hw1/hw1.qmd) | [hw1.html](./hw1/hw1.html) |
+| Homework 1 | [hw1.qmd](./hw1/hw1.qmd) | [hw1.html](https://yuranshi.github.io/biostat-212a-homework/hw1/hw1.html) |
 
 ## Usage
 
