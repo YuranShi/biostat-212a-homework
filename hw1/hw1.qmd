@@ -1,0 +1,740 @@
+---
+title: "Biostat 212a Homework 1"
+subtitle: "Due Jan 28, 2025 @ 11:59PM"
+author: "Molly Shi (UID: 906558988)"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+format:
+  html:
+    math: mathjax
+    theme: cosmo
+    embed-resources: true
+    number-sections: true
+    toc: true
+    toc-depth: 4
+    toc-location: left
+    code-fold: false
+engine: knitr
+knitr:
+  opts_chunk: 
+    fig.align: 'center'
+    # fig.width: 6
+    # fig.height: 4
+    message: FALSE
+    cache: false
+editor: 
+  markdown: 
+    wrap: 72
+---
+
+## Filling gaps in lecture notes (10% pts)
+
+Consider the regression model $$
+Y = f(X) + \epsilon,
+$$ where $\operatorname{E}(\epsilon) = 0$.
+
+### Optimal regression function
+
+Show that the choice $$
+f_{\text{opt}}(X) = \operatorname{E}(Y | X)
+$$ minimizes the mean squared prediction error $$
+\operatorname{E}\{[Y - f(X)]^2\},
+$$ where the expectations averages over variations in both $X$ and $Y$.
+(Hint: condition on $X$.)
+
+**Solution** The MSPE can be expressed as: $$ 
+\begin{gather}
+\mathbb{E}[(Y - f(X))^2] \\
+= \mathbb{E}[(Y - f_{\text{opt}}(X) + f_{\text{opt}}(X) - f(X))^2] \\
+= (Y - f_{\text{opt}}(X))^2 + (f_{\text{opt}}(X) - f(X))^2 + 2(Y - f_{\text{opt}}(X))(f_{\text{opt}}(X) - f(X))
+\end{gather}
+$$ Then, we take the expectation of both sides: $$
+\begin{gather}
+\mathbb{E}[(Y - f(X))^2] \\
+= \mathbb{E}[(Y - f_{\text{opt}}(X))^2] + \mathbb{E}[(f_{\text{opt}}(X) - f(X))^2] + 2\mathbb{E}[(Y - f_{\text{opt}}(X))(f_{\text{opt}}(X) - f(X))]
+\end{gather}
+$$Conditioning on $X$ and using the fact that
+$f_{\text{opt}}(X) = \mathbb{E}[Y|X]$, the term $Y - f_{\text{opt}}(X)$
+is equal to 0, which turns the equation into:
+
+$$
+\mathbb{E}[(Y - f(X))^2] = \mathbb{E}[(Y - f_{\text{opt}}(X))^2] + \mathbb{E}[(f_{\text{opt}}(X) - f(X))^2]
+$$
+
+Since $\mathbb{E}[(f_{\text{opt}}(X) - f(X))^2] \geq 0$, the MSPE is
+minimized when $f(X) = f_{\text{opt}}(X)$, which is
+$$f(X) = \mathbb{E}[Y|X].$$
+
+### Bias-variance trade-off
+
+Given an estimate $\hat f$ of $f$, show that the test error at a $x_0$
+can be decomposed as $$
+\operatorname{E}\{[y_0 - \hat f(x_0)]^2\} = \underbrace{\operatorname{Var}(\hat f(x_0)) + [\operatorname{Bias}(\hat f(x_0))]^2}_{\text{MSE of } \hat f(x_0) \text{ for estimating } f(x_0)} + \underbrace{\operatorname{Var}(\epsilon)}_{\text{irreducible}},
+$$ where the expectation averages over the variability in $y_0$ and
+$\hat f$.
+
+**Solution** To decompose$\operatorname{E}\{[y_0 - \hat f(x_0)]^2\}$
+into
+$\text{Var}(\hat{f}(x_0)) + [\text{Bias}(\hat{f}(x_0))]^2 + \text{Var}(\epsilon)$,
+we can first express the test error by substituting
+$y_0 = f(x_0) + \epsilon$ :
+
+$$
+\begin{gather}
+\mathbb{E}[(y_0 - \hat{f}(x_0))^2] \\
+= \mathbb{E}[(f(x_0) + \epsilon - \hat{f}(x_0))^2] \\
+= \mathbb{E}[(f(x_0) - \hat{f}(x_0))^2] + 2\mathbb{E}[(f(x_0) - \hat{f}(x_0))\epsilon] + \mathbb{E}[\epsilon^2]
+\end{gather}
+$$
+
+We can then simplify the terms based on $\epsilon$ is independent of
+$\hat{f}(x_0)$ and has zero mean, which makes
+$\mathbb{E}[(f(x_0) - \hat{f}(x_0))\epsilon] = 0$
+
+Thus, we can simplify the equation as
+
+$$
+\begin{gather}
+\mathbb{E}[(y_0 - \hat{f}(x_0))^2] \\
+= \mathbb{E}[(f(x_0) - \hat{f}(x_0))^2] + \mathbb{E}[\epsilon^2]
+\end{gather}
+$$
+
+Then, to further decompose $\mathbb{E}[(f(x_0) - \hat{f}(x_0))^2]$, we
+subtract and add term $\mathbb{E}[\hat{f}(x_0)]$ and expand the equation
+as:
+
+$$
+\begin{gather}
+(f(x_0) - \hat{f}(x_0))^2 \\
+= (f(x_0) - \mathbb{E}[\hat{f}(x_0)])^2 + (\mathbb{E}[\hat{f}(x_0)] - \hat{f}(x_0))^2 + 2(f(x_0) - \mathbb{E}[\hat{f}(x_0)])(\mathbb{E}[\hat{f}(x_0)] - \hat{f}(x_0))
+\end{gather}
+$$
+
+In this case, the third term
+$\mathbb{E}[\hat{f}(x_0)])(\mathbb{E}[\hat{f}(x_0)] - \hat{f}(x_0)) = 0$
+because $\mathbb{E}[\hat{f}(x_0)] - \hat{f}(x_0)$ as the deviation of
+the estimator $\hat{f}(x_0)$ from its expectation, will have a zero mean
+by definition of variance.
+
+Therefore, the equation will be:
+
+$$
+\begin{gather}
+\mathbb{E}[(y_0 - \hat{f}(x_0))^2] \\
+= \mathbb{E}[(f(x_0) - \hat{f}(x_0))^2] + \mathbb{E}[\epsilon^2] \\
+= \mathbb{E}(f(x_0) - \mathbb{E}[\hat{f}(x_0)])^2 + \mathbb{E}(\mathbb{E}[\hat{f}(x_0)] - \hat{f}(x_0))^2 + \mathbb{E}[\epsilon^2] 
+\end{gather}
+$$
+
+where first term becomes the bias squared
+$\mathbb{E}[(f(x_0) - \mathbb{E}[\hat{f}(x_0)])^2] = [\text{Bias}(\hat{f}(x_0))]^2$,
+
+and the second term becomes the variance
+$\mathbb{E}[(\mathbb{E}[\hat{f}(x_0)] - \hat{f}(x_0))^2] = \text{Var}(\hat{f}(x_0))$,
+
+and the third term $\mathbb{E}[\epsilon^2]$ is the irreducible error.
+
+Therefore, we can conclude that $$
+\operatorname{E}\{[y_0 - \hat f(x_0)]^2\} = \text{Var}(\hat{f}(x_0)) + [\text{Bias}(\hat{f}(x_0))]^2 + \text{Var}(\epsilon)
+$$
+
+## ISL Exercise 2.4.3 (10% pts)
+
+We now revisit the bias-variance decomposition.
+
+\(a\) Provide a sketch of typical (squared) bias, variance, training
+error, test error, and Bayes (or irreducible) error curves, on a single
+plot, as we go from less flexible statistical learning methods towards
+more flexible approaches. The x-axis should represent the amount of
+flexibility in the method, and the y-axis should represent the values
+for each curve. There should be five curves. Make sure to label each
+one.
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+# Define the x values
+x <- seq(0, 10, by = 0.02)
+
+# Define the functions
+squared_bias <- function(x) {
+  0.002 * (-x + 10)^3
+}
+variance <- function(x) {
+  0.002 * x^3
+}
+training_error <- function(x) {
+  2.38936 - 0.825077 * x + 0.176655 * x^2 - 0.0182319 * x^3 + 0.00067091 * x^4
+}
+test_error <- function(x) {
+  3 - 0.6 * x + 0.06 * x^2
+}
+bayes_error <- function(x) {
+  x + 1 - x
+}
+
+# Create a data frame with all values
+data <- tibble(
+  x = x,
+  `squared bias` = squared_bias(x),
+  variance = variance(x),
+  `training error` = training_error(x),
+  `test error` = test_error(x),
+  `Bayes error` = bayes_error(x)
+) %>%
+  pivot_longer(cols = -x, names_to = "Metric", values_to = "Value")
+
+# Plot using ggplot2
+ggplot(data, aes(x = x, y = Value, color = Metric)) +
+  geom_line(size = 1) +
+  labs(
+    x = "Model Flexibility",
+    y = "Value",
+    title = "Bias-Variance Tradeoff Plot",
+    color = "Metric"
+  ) +
+  theme_minimal() +
+  theme(
+    text = element_text(size = 14),
+    plot.title = element_text(hjust = 0.5),
+    legend.position = "top"
+  )
+```
+
+```{r, eval = F}
+library(tidyverse)
+# Advertising
+Advertising <- read_csv("../hw1/Advertising.csv",  col_select = TV:sales) %>% 
+  print(width = Inf)
+
+fit <- lm(sales ~ TV, data = Advertising)
+
+```
+
+\(b\) Explain why each of the five curves has the shape displayed in
+part (a).
+
+**Solution**
+
+1.  Squared bias will decreases with increasing flexibility because more
+    flexible methods will have less bias.
+
+2.  Variance will increase with increasing flexibility because more
+    flexible methods will have higher variance.
+
+3.  Training error will decrease with increasing flexibility because
+    more complex model will have better fit over training data.
+
+4.  Test error will decrease at first but increase overtime because more
+    flexibility will induce overfitting, which means the model has a
+    better fit over training data over testing data.
+
+5.  Irreducible error does not change with model flexibility.
+
+## ISL Exercise 2.4.4 (10% pts)
+
+You will now think of some real-life applications for statistical
+learning.
+
+\(a\) Describe three real-life applications in which classification
+might be useful. Describe the response, as well as the predictors. Is
+the goal of each application inference or prediction? Explain your
+answer.
+
+**Solution**
+
+| Real-life application | Predictors | Goal (inference/prediction) |
+|----|----|----|
+| Image classification | Pixel intensities of the image | Prediction |
+| Virus type classification | Genetic sequences, patient symptoms, geographic data | Prediction |
+| Spam email detection | Word frequencies, sender address, keywords, metadata | Prediction |
+
+\(b\) Describe three real-life applications in which regression might be
+useful. Describe the response, as well as the predictors. Is the goal of
+each application inference or prediction? Explain your answer.
+
+**Solution**
+
+| Real-life application | Predictors | Goal (inference/prediction) |
+|----|----|----|
+| Patient's health monitoring | Age, diet, physical activity, medication | Prediction |
+| Predicting student's score | Study hours, attendance, prior grades, resources used | Prediction |
+| Profit prediction | Marketing budget, product price, customer demographics, economic indicators | Inference |
+
+\(c\) Describe three real-life applications in which cluster analysis
+might be useful.
+
+**Solution**
+
+1)  Gene Expression Clustering: Grouping genes with similar expression
+    profiles to identify functional relationships or biological
+    pathways.
+2)  Drug Discovery: Identifying clusters of chemical compounds with
+    similar molecular structures or pharmacological properties for new
+    drug development.
+3)  Customer Segmentation: Grouping customers based on purchasing
+    behaviors, demographics, or preferences to tailor marketing
+    strategies.
+
+## ISL Exercise 2.4.10 (30% pts)
+
+This exercise involves the `Boston` housing data set.
+
+(a) To begin, load in the Boston data set. The Boston data set is part
+    of the ISLR2 library in R. How many rows are in this data set? How
+    many columns? What do the rows and columns represent?
+
+Your can read in the `boston` data set directly from url
+<https://raw.githubusercontent.com/ucla-biostat-212a/2024winter/master/slides/data/Boston.csv>.
+A documentation of the `boston` data set is
+[here](https://www.rdocumentation.org/packages/ISLR2/versions/1.3-2/topics/Boston).
+
+::: panel-tabset
+#### R
+
+```{r, evalue = F}
+library(tidyverse)
+library(ISLR2)
+
+Boston <- read_csv("https://raw.githubusercontent.com/ucla-biostat-212a/2024winter/master/slides/data/Boston.csv", col_select = -1) %>% 
+  print(width = Inf)
+
+Boston
+```
+
+#### Python
+
+```{python}
+import pandas as pd
+import io
+import requests
+
+url = "https://raw.githubusercontent.com/ucla-econ-425t/2023winter/master/slides/data/Boston.csv"
+s = requests.get(url).content
+Boston = pd.read_csv(io.StringIO(s.decode('utf-8')), index_col = 0)
+Boston
+```
+:::
+
+**Solution** There are 506 rows and 13 columns in this dataset. Each row
+in this dataset represent a house, and each column represent a property
+of the house. Description of the data columns are:
+
+-   `CRIM` - per capita crime rate by town
+
+-   `ZN` - proportion of residential land zoned for lots over 25,000
+    sq.ft.
+
+-   `INDUS` - proportion of non-retail business acres per town.
+
+-   `CHAS` - Charles River dummy variable (1 if tract bounds river; 0
+    otherwise)
+
+-   `NOX` - nitric oxides concentration (parts per 10 million)
+
+-   `RM` - average number of rooms per dwelling
+
+-   `AGE` - proportion of owner-occupied units built prior to 1940
+
+-   `DIS` - weighted distances to five Boston employment centres
+
+-   `RAD` - index of accessibility to radial highways
+
+-   `TAX` - full-value property-tax rate per \$10,000
+
+-   `PTRATIO` - pupil-teacher ratio by town
+
+-   `LSTAT` - % lower status of the population
+
+-   `MEDV` - Median value of owner-occupied homes in \$1000's
+
+b.  Make some pairwise scatterplots of the predictors (columns) in this
+    data set. Describe your findings.
+
+    ```{r}
+    library(ggplot2)
+
+    ggplot(Boston, aes(tax, rm)) + 
+      geom_point()
+    ggplot(Boston, aes(indus, crim)) +
+      geom_point()
+    ```
+
+    **Solution** From the scatterplot between `tax` (full-value
+    property-tax rate per \$10,000) and `rm` (average number of rooms),
+    we can observe that the house that have less property-tax rate per
+    \$10,000 usually have more rooms. And from the scatterplot between
+    `crim` (crime rate) and `indus` (proportion of non-retail business
+    per acres per town), we can see that the high crime rate are
+    associated with a particular `indus` level (around 17-18), which is
+    quite interesting.
+
+c.  Are any of the predictors associated with per capita crime rate? If
+    so, explain the relationship.
+
+    ```{r}
+    heatmap(cor(Boston, method = "spearman"), cexRow = 1.1, cexCol = 1.1)
+    ```
+
+    **Solution** Yes. From the heat map with Spearman correlation, we
+    can observe that `crim` have the highest association with `chas`
+    (the Charles River dummy variable), which indicate some correlation
+    between crime rate and adjacency to Charles River. In addition,
+    `crim` also have relative high correlation coefficient with `dis`,
+    `rm`, `zn`, `ptratio` .
+
+d.  Do any of the census tracts of Boston appear to have particularly
+    high crime rates? Tax rates? Pupil-teacher ratios? Comment on the
+    range of each predictor.
+
+    ```{r}
+    Boston |>
+      pivot_longer(cols = 1:13) |>
+      filter(name %in% c("crim", "tax", "ptratio")) |>
+      ggplot(aes(value)) +
+      geom_histogram(bins = 20) +
+      facet_wrap(~name, scales = "free", ncol = 1)
+    ```
+
+    **Solution**
+
+    -   The **`crim`** variable is highly skewed to the right, with many
+        outliers at the upper end of the distribution. This suggests
+        that the majority of towns have very low crime rates, likely
+        between 0 and 5, while a few towns exhibit extremely high crime
+        rates exceeding 70. Overall, the crime rate ranges from 0 to
+        approximately 80.
+    -   The **`ptratio`** variable shows a relatively mild right skew.
+        The values range from 12.5 to 22, with no significant outliers
+        observed. This suggests a more uniform distribution of
+        pupil-teacher ratios among the towns.
+    -   The **`tax`** variable is skewed to the left, indicating that
+        most towns have lower property-tax rates. The distribution
+        ranges from 200 to 800, but there is a noticeable gap between
+        500 and 600, where no towns have tax rates in that interval.
+
+e.  How many of the census tracts in this data set bound the Charles
+    river?
+
+    ```{r}
+    table(Boston$chas)
+    ```
+
+f.  What is the median pupil-teacher ratio among the towns in this data
+    set?
+
+    ```{r}
+    median(Boston$ptratio)
+    ```
+
+g.  Which census tract of Boston has lowest median value of
+    owner-occupied homes? What are the values of the other predictors
+    for that census tract, and how do those values compare to the
+    overall ranges for those predictors? Comment on your findings.
+
+    ```{r}
+    Boston <- data.frame("obs" = c(1:length(Boston$crim)), Boston)
+    Boston %>%  filter(medv == min(medv))
+    ```
+
+    **Solution** The The above two census tracts have the lowest median
+    value of 5 from the owner occupied homes.
+
+    ```{r}
+    summary(Boston[,2:14])
+    ```
+
+    -   `crim`: The crime rates in both tracts are outliers,
+        significantly higher than the median crime rate.
+    -   `zn`: Both tracts have zero proportion of land zoned for lots
+        over 25,000 sq. ft., which matches the median value, suggesting
+        minimal or no investment in these areas.
+    -   `indus`: The proportion of non-retail business acres is 18.1 for
+        both tracts, exceeding the median and falling in the third
+        quartile, indicating promising business opportunities.
+    -   `chas`: Neither tract is adjacent to the Charles River.
+    -   `nox`: Nitrogen oxide concentrations are above the third
+        quartile, suggesting high levels of pollution, potentially due
+        to proximity to highways.
+    -   `rm`: The average number of rooms per dwelling falls in the
+        first quartile, indicating smaller homes.
+    -   `age`: The proportion of owner-occupied units built before 1940
+        is in the upper quartile, reflecting very old housing stock.
+    -   `dis`: The weighted average distance to five Boston employment
+        centers is in the lower quartile, possibly indicating high
+        unemployment.
+    -   `rad`: Both tracts have the maximum index for radial highway
+        accessibility, implying close proximity to highways.
+    -   `tax`: Property tax rates per \$10,000 are near the third
+        quartile, indicating high taxes for smaller homes, suggesting a
+        non-linear relationship between tax rates and housing size.
+    -   `ptratio`: The pupil-teacher ratio is near the third quartile,
+        suggesting a relatively strong education system.
+    -   `lstat`: The proportion of the population in lower socioeconomic
+        status is in the upper quartile, indicating a high concentration
+        of low-income households.
+
+h.  In this data set, how many of the census tract average more than
+    seven rooms per dwelling? More than eight rooms per dwelling?
+    Comment on the census tracts that average more than eight rooms per
+    dwelling.
+
+    ```{r}
+    seven_rooms_above = Boston %>% filter(rm > 7)
+    eight_rooms_above = Boston %>% filter(rm > 8)
+    data.frame("more_than_7_rooms" = c(length(seven_rooms_above$rm)),
+               "more_than_8_rooms" = c(length(eight_rooms_above$rm)))
+    ```
+
+    ```{r}
+    plot_all = boxplot(Boston[, 2:14], main="All House Distribution")
+    plot_eight = boxplot(eight_rooms_above[, 2:14], main="House > 8 Bedroom Distribution")
+    ```
+
+    **Solution** Comparing the box plot distribution between all houses
+    and houses with more than eight bedrooms, the tax is generally lower
+    and the crime rate are also lower for houses with more than 8
+    bedrooms.
+
+## ISL Exercise 3.7.3 (20% pts)
+
+Suppose we have a data set with five predictors, $X_1$ = GPA, $X_2$ =
+IQ, $X_3$ = Level (1 for College and 0 for High School), $X_4$ =
+Interaction between GPA and IQ, and $X_5$ = Interaction between GPA and
+Level. The response is starting salary after graduation (in thousands of
+dollars). Suppose we use least squares to fit the model, and get
+$\hat\beta_0 = 50$, $\hat\beta_1 = 20$, $\hat\beta_2 = 0.07$,
+$\hat\beta_3 = 35$, $\hat\beta_4 =
+0.01$, $\hat\beta_5 = -10$.
+
+a.  Which answer is correct, and why?
+
+    i.  For a fixed value of IQ and GPA, high school graduates earn more
+        on average than college graduates.
+
+    ii. For a fixed value of IQ and GPA, college graduates earn more on
+        average than high school graduates.
+
+    iii. For a fixed value of IQ and GPA, high school graduates earn
+         more on average than college graduates provided that the GPA is
+         high enough.
+
+    iv. For a fixed value of IQ and GPA, college graduates earn more on
+        average than high school graduates provided that the GPA is high
+        enough.
+
+    **Solution** According to the given information, the model is
+
+    $$y = \beta_0 + \beta_1 \cdot \text{GPA} + \beta_2 \cdot \text{IQ} + \beta_3 \cdot \text{Level} + \beta_4 \cdot \text{GPA} \cdot \text{IQ} + \beta_5 \cdot \text{GPA} \cdot \text{Level}$$
+
+    For a fixed IQ and GPA, we can calculate the difference in salary by
+
+    $$
+    \Delta y = y_{level=1} - y_{level=0} = \beta_3 + \beta_5 \cdot \text{GPA}
+    $$
+
+    Since $\Delta y > 0$ , we can derive that
+
+    $$
+    \beta_3 + \beta_5 \cdot \text{GPA} > 0 \\
+    \text{GPA} < \dfrac{-\beta_3}{\beta_5} = \dfrac{-35}{-10} = 3.5
+    $$
+
+    Hence, **option iii** is correct: for a fixed value of IQ and GPA,
+    high school graduates earn more, on average, than college graduates
+    provided that the GPA is more than equal to 3.5.
+
+b.  Predict the salary of a college graduate with IQ of 110 and a GPA \>
+    of 4.0.
+
+    ```{r}
+    model <- function(gpa, iq, level) {
+      50 +
+        gpa * 20 +
+        iq * 0.07 +
+        level * 35 +
+        gpa * iq * 0.01 +
+        gpa * level * -10
+    }
+    x <- seq(1, 5, length = 10)
+    y <- seq(1, 200, length = 20)
+    college <- t(outer(x, y, model, level = 1))
+    high_school <- t(outer(x, y, model, level = 0))
+
+    model(gpa = 4, iq = 110, level = 1)
+    ```
+
+    **Solution** The salary of a college graduate with IQ of 110 and a
+    GPA \> of 4.0 is \$137.1 k.
+
+c.  True or false: Since the coefficient for the GPA/IQ interaction term
+    is very small, there is very little evidence of an interaction
+    effect. Justify your answer.
+
+    **Solution** False. It's because GPA and IQ operate on different
+    scales. A more effective approach would be to explicitly test the
+    significance of the interaction effect and/or visualize or quantify
+    its impact on sales within realistic ranges of GPA and IQ values.
+
+## ISL Exercise 3.7.15 (20% pts)
+
+This problem involves the `Boston` data set, which we saw in the lab for
+this chapter. We will now try to predict per capita crime rate using the
+other variables in this data set. In other words, per capita crime rate
+is the response, and the other variables are the predictors.
+
+a.  For each predictor, fit a simple linear regression model to predict
+    the response. Describe your results. In which of the models is there
+    a statistically significant association between the predictor and
+    the response? Create some plots to back up your assertions.
+
+    ```{r}
+    pred <- subset(Boston, select = -crim)
+    fits <- lapply(pred, function(x) lm(Boston$crim ~ x))
+    printCoefmat(do.call(rbind, lapply(fits, function(x) coef(summary(x))[2, ])))
+    ```
+
+    **Solution** All the estimate values can be used as predictors for
+    variable "crim," except for the independent variable `chas`, as
+    there appears to be no association between tracts near the Charles
+    River and crime rate in the area. Most variables are individually
+    significant as predictors.
+
+b.  Fit a multiple regression model to predict the response using all of
+    the predictors. Describe your results. For which predictors can we
+    reject the null hypothesis $H_0 : \beta_j = 0$?
+
+    ```{r}
+    mfit <- lm(crim ~ ., data = Boston)
+    summary(mfit)
+    ```
+
+    **Solution** At a significance level of 0.05, variable `zn`, `dis`,
+    `rad`, `black` and `medv` have significant association with `crim`.
+    Collectively, the predictors account for 44.93% of the variation in
+    the crime rate. This suggests that using all variables together
+    explains a greater proportion of the variation compared to simple
+    regression, where the highest variance explained was 39%. The full
+    model improves the explained variation by an additional 5.9%.
+
+c.  How do your results from (a) compare to your results from (b)?
+    Create a plot displaying the univariate regression coefficients
+    from (a) on the $x$-axis, and the multiple regression coefficients
+    from (b) on the $y$-axis. That is, each predictor is displayed as a
+    single point in the plot. Its coefficient in a simple linear
+    regression model is shown on the x-axis, and its coefficient
+    estimate in the multiple linear regression model is shown on the
+    y-axis.
+
+    ```{r}
+    plot(sapply(fits, function(x) coef(x)[2]), coef(mfit)[-1],
+      xlab = "Univariate regression",
+      ylab = "multiple regression"
+    )
+    ```
+
+    **Solution** Based on the plot, we can observe that the fitting
+    from (b) show reduced significance compared to the models in part
+    (a). The most notable difference in coefficient values between the
+    simple and multiple models is observed for `nox` In the simple
+    model, the coefficient for `nox` is 31.25, while in the multiple
+    model, it is -9.96. Coefficients for other predictors also show
+    differences between the two models.
+
+d.  Is there evidence of non-linear association between any of the
+    predictors and the response? To answer this question, for each
+    predictor X, fit a model of the form $$
+    Y = \beta_0 + \beta_1X + \beta_2X^2 + \beta_3X^3 + \epsilon
+    $$
+
+    ```{r}
+    pred <- subset(pred, select = -chas)
+    fits <- lapply(names(pred), function(p) {
+      f <- paste0("crim ~ poly(", p, ", 3)")
+      lm(as.formula(f), data = Boston)
+    })
+    for (fit in fits) printCoefmat(coef(summary(fit)))
+    ```
+
+    **Solution** Based on the above summary plot, there are many
+    variables which have non-linearity. For variable `zn`, `rm`, `rad`,
+    `tax`, and `lstat`, the squared coefficient is significant. For
+    variable `indus`, `nox`, `age`, `dis`, `ptratio` and `medv` , the
+    quadratic coefficient is significant.
+
+## Bonus question (20% pts)
+
+For multiple linear regression, show that $R^2$ is equal to the
+correlation between the response vector
+$\mathbf{y} = (y_1, \ldots, y_n)^T$ and the fitted values
+$\hat{\mathbf{y}} = (\hat y_1, \ldots, \hat y_n)^T$. That is $$
+R^2 = 1 - \frac{\text{RSS}}{\text{TSS}} = [\operatorname{Cor}(\mathbf{y}, \hat{\mathbf{y}})]^2
+$$**Solution** In multiple linear regression, the **RSS** (residual sum
+of squares) and **TSS**(total sum of squares), and **ESS** (explained
+sum of square) can be written as:
+
+$$
+\begin{gather}
+\text{RSS} = \sum_{i=1}^n (y_i - \hat{y}_i)^2 \\
+\text{TSS} = \sum_{i=1}^n (y_i - \bar{y})^2 \\
+\text{ESS} = \sum_{i=1}^n (\hat{y}_i - \bar{y})^2 \\
+and\:\: \text{TSS} = \text{ESS}+\text{RSS}
+\end{gather}
+$$
+
+Note that **TSS** can be decomposed into the sum of **ESS** and **RSS**
+because the observed $y$ is split into the fitted values $\hat{y}$​ and
+the residuals.
+
+Alternatively, $R^2$ measures the proportion of the total variability in
+$\mathbf{y}$ that is explained by the regression model, which can also
+be written as:
+
+$$
+\begin{gather}
+R^2 = 1 - \frac{\text{RSS}}{\text{TSS}} \\
+= \frac{\text{TSS}}{\text{TSS}} - \frac{\text{RSS}}{\text{TSS}} \\ 
+= \frac{\text{ESS}}{\text{TSS}}
+\end{gather}
+$$
+
+On the other hand, the squared correlation can be decomposed as
+covariance over variance:
+
+$$
+[\operatorname{Cor}(\mathbf{y}, \hat{\mathbf{y}})]^2 = \frac{\operatorname{Cov}(\mathbf{y}, \hat{\mathbf{y}})^2}{\operatorname{Var}(\mathbf{y}) \cdot \operatorname{Var}(\hat{\mathbf{y}})}
+$$
+
+The covariance between $\mathbf{y}$ and $\hat{\mathbf{y}}$ , in this
+case, $\operatorname{Cov}(\mathbf{y}, \hat{\mathbf{y}})$ can be written
+as $\operatorname{Var}(\hat{\mathbf{y}})$ since the fitted values
+$\hat{\mathbf{y}}$ are linear combinations of $\mathbf{y}$
+($\hat{\mathbf{y}}=X\hat{\mathbf{\beta}}$
+
+$$
+\begin{gather}
+\operatorname{Cov}(\mathbf{y}, \hat{\mathbf{y}}) = \frac{1}{n} \sum_{i=1}^n (y_i - \bar{y})(\hat{y}_i - \bar{y}) \\
+ = \operatorname{Var}(\hat{\mathbf{y}}) = \frac{\text{ESS}}{n}
+\end{gather}
+$$
+
+Given that:
+
+$$
+\operatorname{Cov}(\mathbf{y}, \hat{\mathbf{y}}) = \frac{\text{ESS}}{n}, \operatorname{Var}(\mathbf{y}) = \frac{\text{TSS}}{n}, \operatorname{Var}(\hat{\mathbf{y}}) = \frac{\text{ESS}}{n}
+$$
+
+We can substitute covariance and variance in terms of:
+
+$$
+\begin{gather}
+[\operatorname{Cor}(\mathbf{y}, \hat{\mathbf{y}})]^2 = \frac{\operatorname{Cov}(\mathbf{y}, \hat{\mathbf{y}})^2}{\operatorname{Var}(\mathbf{y}) \cdot \operatorname{Var}(\hat{\mathbf{y}})}\\
+= \frac{\left(\frac{\text{ESS}}{n}\right)^2}{\left(\frac{\text{TSS}}{n}\right) \cdot \left(\frac{\text{ESS}}{n}\right)} \\
+= \frac{\text{ESS}}{\text{TSS}}
+\end{gather}
+$$
+
+Since $R^2 = \frac{\text{ESS}}{\text{TSS}}$ , we can conclude that
+$R^2 = 1 - \frac{\text{RSS}}{\text{TSS}} = [\operatorname{Cor}(\mathbf{y}, \hat{\mathbf{y}})]^2$
