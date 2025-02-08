@@ -1,7 +1,7 @@
 ---
 title: "Biostat 212a Homework 2"
 subtitle: "Due Feb 8, 2025 @ 11:59PM"
-author: "YOUR NAME and UID"
+author: "Molly Shi (UID: 906558988)"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 format:
   html:
@@ -24,12 +24,480 @@ knitr:
 
 ## ISL Exercise 4.8.1 (10pts)
 
+Using a little bit of algebra, prove that (4.2) is equivalent to (4.3). In other words, the logistic function representation and logit representation for the logistic regression model are equivalent.
+
+We need to show that
+
+$$
+p(X) = \frac{e^{\beta_0 + \beta_1X}}{1 + e^{\beta_0 + \beta_1X}}
+$$
+
+is equivalent to
+
+$$
+\frac{p(X)}{1-p(X)} = e^{\beta_0 + \beta_1X}
+$$
+
+**Solution** We can substitute $e^{\beta_0 + \beta_1X}$ with $x = e^{\beta_0 + \beta_1X}$
+
+$$
+\begin{gather}
+\frac{P(X)}{1-p(X)}   &= \frac{\frac{x}{1 + x}} {1 - \frac{x}{1 + x}} \\  &= \frac{\frac{x}{1 + x}} {\frac{1}{1 + x}} \\  &= x
+\end{gather}
+$$
+
 ## ISL Exercise 4.8.6 (10pts)
+
+Suppose we collect data for a group of students in a statistics class with variables $X_1 =$ hours studied, $X_2 =$ undergrad GPA, and $Y =$ receive an A. We fit a logistic regression and produce estimated coefficient, $\hat\beta_0 = -6$, $\hat\beta_1 = 0.05$, $\hat\beta_2 = 1$.
+
+a.  Estimate the probability that a student who studies for 40h and has an undergrad GPA of 3.5 gets an A in the class.
+
+    **Solution** Based on the above description, the logistic regression function will be
+
+    $$
+    \begin{gather}
+    \log\left(\frac{p(X)}{1-p(x)}\right) = -6 + 0.05X_1 + X_2
+    \end{gather}
+    $$
+
+    which is equivalent to
+
+    $$
+    \begin{gather}
+    p(X) = \frac{e^{-6 + 0.05X_1 + X_2}}{1 + e^{-6 + 0.05X_1 + X_2}}
+    \end{gather}
+    $$
+
+    When $X_1 = 40$ and $X_2 = 3.5$,
+
+    $$
+    \begin{gather}
+    p(X) = \frac{e^{-6 + 0.05X_1 + X_2}}{1 + e^{-6 + 0.05X_1 + X_2}} \\
+    = \frac{e^{-6 + 0.05\times{40} + 3.5}}{1 + e^{-6 + 0.05\times{40} + 3.5}} \\
+    = 0.3775
+    \end{gather}
+    $$
+
+    Therefore, the probability that a student who studies for 40h and has a 3.5 GPA will have a 37.75% probability of getting an A in the class.
+
+b.  How many hours would the student in part (a) need to study to have a 50% chance of getting an A in the class?
+
+    **Solution** If $p(X) = 0.5$ and $X_2 = 3.5$, we can convert the above equation to calculate $X_1$:
+
+    $$
+    \begin{align}
+    X_1 = [\log\left(\frac{p(X)}{1-p(x)}\right) + 6 - X_2]/0.05 \\
+    = [\log\left(\frac{0.5}{1-0.5}\right) + 6 - 3.5]/0.05 \\
+    = 50
+    \end{align}
+    $$
+
+    It would require 50h of study to have a 50% chance of getting an A in the class.
 
 ## ISL Exercise 4.8.9 (10pts)
 
+This problem has to do with *odds*.
+
+a.  On average, what fraction of people with an odds of 0.37 of defaulting on their credit card payment will in fact default?
+
+    **Solution** Since odds can be defined as $p/(1-p)$, we can get the equation:
+
+    $$
+    \begin{gather}
+    \frac{p(x)}{1 - p(x)} = 0.37 \\
+    p(x) = \frac{0.37}{1 + 0.37} = 0.2701
+    \end{gather}
+    $$
+
+    Therefore, around 27% people with an odds of 0.37 of defaulting on their credit card payment will in fact default.
+
+b.  Suppose that an individual has a 16% chance of defaulting on her credit card payment. What are the odds that she will default?
+
+    **Solution** Odd can be calculated based on $p/(1-p)$. If $p(x) = 0.16$,
+
+    $$
+    \begin{gather}
+    \frac{p(x)}{1 - p(x)} = \frac{0.16}{1 - 0.16} = 0.1905
+    \end{gather}
+    $$
+
+    The odds that she will default is 19.05%.
+
 ## ISL Exercise 4.8.13 (a)-(i) (50pts)
+
+This question should be answered using the `Weekly` data set, which is part of the `ISLR2` package. This data is similar in nature to the `Smarket` data from this chapter's lab, except that it contains 1,089 weekly returns for 21 years, from the beginning of 1990 to the end of 2010.
+
+a.  Produce some numerical and graphical summaries of the `Weekly` data. Do there appear to be any patterns?
+
+    **Solution** Based on the correlation plot, volume have strongly positive correlation (0.84) with year, while all the other correlations are quite weak.
+
+    ```{r, message = FALSE, warning = FALSE}
+    library(MASS)
+    library(class)
+    library(tidyverse)
+    library(corrplot)
+    library(ISLR2)
+    library(e1071)
+    library(caret)
+    ```
+
+    ```{r}
+    summary(Weekly)
+    ```
+
+    ```{r}
+    corr_matrix <- cor(Weekly[, -9])
+    corrplot(corr_matrix, method = "color", 
+             type = "upper", 
+             order = "hclust", 
+             diag = FALSE,
+             tl.col = "black", tl.srt = 45, # Text color and rotation
+             addCoef.col = "black", # Add correlation coefficients
+             number.cex = 0.7) # Adjust coefficient size
+    ```
+
+b.  Use the full data set to perform a logistic regression with `Direction` as the response and the five lag variables plus `Volume` as predictors. Use the summary function to print the results. Do any of the predictors appear to be statistically significant? If so, which ones?
+
+    **Solution** Based on the summary, Lag2 is the only predictor that is statically significant, while all other predictor are not significant.
+
+    ```{r}
+    linear_fit <- glm(
+      Direction ~ Lag1 + Lag2 + Lag3 + Lag4 + Lag5 + Volume,
+      data = Weekly,
+      family = binomial)
+
+    summary(linear_fit)
+    ```
+
+c.  Compute the confusion matrix and overall fraction of correct predictions. Explain what the confusion matrix is telling you about the types of mistakes made by logistic regression.
+
+    **Solution** We can first get the prediction probability and convert the probability to prediction label.
+
+    ```{r}
+    pred_prob <- predict(linear_fit, type = "response") # get prediction probabilities
+    pred_label <- ifelse(pred_prob > 0.5, "Up", "Down") # get prediction label
+    table(pred_label, Weekly$Direction)
+    ```
+
+    The confusion matrix output will follow the below form:
+
+    ```         
+            Down  Up
+      Down   TP  FN
+      Up     FP  TN
+    ```
+
+    Based on the confusion matrix, we can calculate the accuracy, Type I and Type II error.
+
+    $$
+    \begin{gather}
+    Accuracy =
+    \frac{TP+TN}{TP + TN + FP + FN} \\
+    = \frac{557 + 54}{557 + 54 + 48 + 430} \\
+    = 56.1\%
+    \end{gather}
+    $$
+
+    $$
+    Type\ I\ Error = \frac{FP}{FP + TN} \\
+    = \frac{48}{48 + 54} \\
+    = 47\%
+    $$
+
+    $$
+    Type\ II\ Error = \frac{FN}{FN + TP} \\
+    = \frac{430}{430 + 557} \\
+    = 43.6\%
+    $$
+
+    The accuracy of our model is 56.1%, which means the model correctly predict the direction of the stock market (Up or Down) about 56.1% of the time. The type I error rate is 47%, which means in 47% of the time, model predicts the market will go "Up" when it actually goes "Down." And the type II error rate is 43.6%, which means the predicts the market will go "Down" when it actually goes "Up" 43.6% percent of time.
+
+d.  Now fit the logistic regression model using a training data period from 1990 to 2008, with `Lag2` as the only predictor. Compute the confusion matrix and the overall fraction of correct predictions for the held out data (that is, the data from 2009 and 2010).
+
+    **Solution**
+
+    ```{r}
+    train <- Weekly$Year < 2009
+
+    lag2_fit <- glm(
+      Direction ~ Lag2,
+      data = Weekly[train, ],
+      family = binomial
+    )
+
+    pred_prob <- predict(lag2_fit, Weekly[!train, ], type = "response")
+    pred_label <- ifelse(pred_prob > 0.5, "Up", "Down")
+    table(pred_label, Weekly[!train, ]$Direction)
+    ```
+
+    Based on the confusion matrix, we can calculate the accuracy based on the formula:
+
+    $$
+    \begin{gather}
+    Accuracy = \frac{TP+TN}{TP + TN + FP + FN} \\
+    \frac{9+56}{9 + 56 + 34 + 5} \\
+    = 62.5\%
+    \end{gather}
+    $$
+
+e.  Repeat (d) using LDA.
+
+    **Solution**
+
+    ```{r}
+    lda_fit <- lda(
+      Direction ~ Lag2,
+      data = Weekly[train, ]
+    )
+
+    pred_label <- predict(lda_fit, Weekly[!train, ], type = "response")$class
+    table(pred_label, Weekly[!train, ]$Direction)
+    ```
+
+    Based on the confusion matrix, we can calculate the accuracy based on the formula:
+
+    $$
+    \begin{gather}
+    Accuracy = \frac{TP+TN}{TP + TN + FP + FN} \\
+    \frac{9+56}{9 + 56 + 34 + 5} \\
+    = 62.5\%
+    \end{gather}
+    $$
+
+f.  Repeat (d) using QDA.
+
+    **Solution**
+
+    ```{r}
+    qda_fit <- qda(
+      Direction ~ Lag2,
+      data = Weekly[train, ]
+    )
+
+    pred_label <- predict(qda_fit, Weekly[!train, ], type = "response")$class
+    table(pred_label, Weekly[!train, ]$Direction)
+    ```
+
+    Based on the confusion matrix, we can calculate the accuracy based on the formula:
+
+    $$
+    \begin{gather}
+    Accuracy = \frac{TP+TN}{TP + TN + FP + FN} \\
+    \frac{61 + 0}{61 + 0 + 0 + 43} \\
+    = 58.7\%
+    \end{gather}
+    $$
+
+g.  Repeat (d) using KNN with $K = 1$.
+
+    **Solution**
+
+    ```{r}
+    knn_fit <- knn(
+      Weekly[train, "Lag2", drop = FALSE],
+      Weekly[!train, "Lag2", drop = FALSE],
+      Weekly$Direction[train]
+    )
+    table(knn_fit, Weekly[!train, ]$Direction)
+    ```
+
+    Based on the confusion matrix, we can calculate the accuracy based on the formula:
+
+    $$
+    \begin{gather}
+    Accuracy = \frac{TP+TN}{TP + TN + FP + FN} \\
+    \frac{31 + 21}{31 + 21 + 30 + 22} \\
+    = 50\%
+    \end{gather}
+    $$
+
+h.  Repeat (d) using naive Bayes.
+
+    **Solution**
+
+    ```{r}
+    nb_fit <- naiveBayes(
+      Direction ~ Lag2,
+      data = Weekly[train, ]
+    )
+
+    pred_label <- predict(nb_fit, Weekly[!train, ], type = "class")
+    table(pred_label, Weekly[!train, ]$Direction)
+    ```
+
+    Based on the confusion matrix, we can calculate the accuracy based on the formula:
+
+    $$
+    \begin{gather}
+    Accuracy = \frac{TP+TN}{TP + TN + FP + FN} \\
+    \frac{61 + 0}{61 + 0 + 0 + 43} \\
+    = 58.7\%
+    \end{gather}
+    $$
+
+i.  Which of these methods appears to provide the best results on this data?
+
+    **Solution** Based solely on the accuracy result, logistic regression and LDA achieve accuracy of 62.5%, making them the best performing model to predict the stock market trend.
 
 ## Bonus question: ISL Exercise 4.8.13 Part (j) (30pts)
 
+Experiment with different combinations of predictors, including possible transformations and interactions, for each of the methods. Report the variables, method, and associated confusion matrix that appears to provide the best results on the held out data. Note that you should also experiment with values for $K$ in the KNN classifier.
+
+**Solution** We can first test on different variables and combination of variables on logistic regression model (one of the best performing models as tested above).
+
+```{r}
+train <- Weekly$Year < 2009
+predictors <- c("Lag1", "Lag2", "Lag3", "Lag4", 
+                "Lag1 + Lag2", "Lag1 + Lag3", "Lag1 + Lag4",
+                "Lag2 + Lag3", "Lag2 + Lag4", "Lag3 + Lag4",
+                "Lag1 + Lag2 + Lag3", "Lag1 + Lag2 + Lag4",
+                "Lag1 + Lag3 + Lag4", "Lag2 + Lag3 + Lag4",
+                "Lag1 + Lag2 + Lag3 + Lag4")
+
+results <- data.frame(Predictors = predictors, Accuracy = NA)
+
+for (i in 1:length(predictors)) {
+  formula <- paste("Direction ~", predictors[i])  # Create the formula string
+  fit <- glm(as.formula(formula), data = Weekly[train, ], family = binomial) # Fit the model
+
+  # Handle potential errors during model fitting
+  if(any(class(fit) == "try-error")) {
+    print(paste("Error fitting model with predictors:", predictors[i]))
+    next # Skip to the next iteration
+  }
+
+  pred_prob <- predict(fit, Weekly[!train, ], type = "response")
+  pred_label <- ifelse(pred_prob > 0.5, "Up", "Down")
+
+  # Check for NA values in predictions - important for calculating accuracy
+  if(any(is.na(pred_label))){
+      print(paste("NA values in prediction with predictors:", predictors[i]))
+      next
+  }
+
+  conf_matrix <- table(pred_label, Weekly$Direction[!train]) # Confusion matrix
+  accuracy <- sum(diag(conf_matrix)) / sum(conf_matrix) # Calculate accuracy
+
+  results$Accuracy[i] <- accuracy
+}
+
+results_sorted <- results[order(results$Accuracy, decreasing = TRUE), ]
+print(results_sorted)
+```
+
+Based on this result, it seems like `Lag2` is our best predictor. In addition, `Lag2 + Lag3` and `Lag2 + Lag4` gives the same performance as `Lag2`. Based on the above experiments, we will perform the following experiments using `Lag2` as our predictor.
+
+We can then tune the hyperparameters of the models that we used for prediction. Specifically, we can tune the k (number of neighbors) in KNN model.
+
+```{r}
+library(class)
+library(caret)
+
+# Define the predictor and response variables
+train_X <- Weekly[train, "Lag2", drop = FALSE]
+test_X <- Weekly[!train, "Lag2", drop = FALSE]
+train_Y <- Weekly$Direction[train]
+test_Y <- Weekly$Direction[!train]
+
+# Define sequence of k values from 10 to 30
+k_values <- seq(10, 30)
+
+# Function to compute accuracy for each k
+accuracy_results <- sapply(k_values, function(k) {
+  pred <- knn(train_X, test_X, train_Y, k = k)
+  mean(pred == test_Y)  # Calculate accuracy
+})
+
+# Create a dataframe and sort by accuracy
+results_df <- data.frame(k = k_values, accuracy = accuracy_results)
+results_df <- results_df[order(-results_df$accuracy), ]  # Sort in descending order
+
+# Display sorted results
+print(results_df)
+```
+
+By using grid search to find the best k, we can boost the performance of the KNN model from 58.6% to 60.5% by setting `k=20`.
+
 ## Bonus question: ISL Exercise 4.8.4 (30pts)
+
+When the number of features $p$ is large, there tends to be a deterioration in the performance of KNN and other *local* approaches that perform prediction using only observations that are *near* the test observation for which a prediction must be made. This phenomenon is known as the *curse of dimensionality*, and it ties into the fact that non-parametric approaches often perform poorly when $p$ is large. We will now investigate this curse.
+
+a.  Suppose that we have a set of observations, each with measurements on $p = 1$ feature, $X$. We assume that $X$ is uniformly (evenly) distributed on $[0, 1]$. Associated with each observation is a response value. Suppose that we wish to predict a test observation's response using only observations that are within 10% of the range of $X$ closest to that test observation. For instance, in order to predict the response for a test observation with $X = 0.6$, we will use observations in the range $[0.55, 0.65]$. On average, what fraction of the available observations will we use to make the prediction?
+
+    **Solution** For $X$ in $[0.05, 0.95]$, the interval is $[X - 0.05, X + 0.05]$, which is 10% of range. This accounts for 90% of possible x values.
+
+    And for x in $[0, 0.05]$ and $[0.95, 1]$, the interval is $[0, X + 0.05]$ and $[X - 0.05, 1]$, respectively. The average length is 7.5% of length. This accounts for 10% of possible x values.
+
+    $$
+    \begin{gather}
+    Percent\ observation = 0.1\times{0.9} + 0.075\times{0.1} \\
+    = 9.75\%
+    \end{gather}
+    $$
+
+b.  Now suppose that we have a set of observations, each with measurements on $p = 2$ features, $X_1$ and $X_2$. We assume that $(X_1, X_2)$ are uniformly distributed on $[0, 1] \times [0, 1]$. We wish to predict a test observation's response using only observations that are within 10% of the range of $X_1$ *and* within 10% of the range of $X_2$ closest to that test observation. For instance, in order to predict the response for a test observation with $X_1 = 0.6$ and $X_2 = 0.35$, we will use observations in the range $[0.55, 0.65]$ for $X_1$ and in the range $[0.3, 0.4]$ for $X_2$. On average, what fraction of the available observations will we use to make the prediction?
+
+    **Solution** Applying the results from the above question, for $X_1$ and $X_2$, the average fraction of available observations that we can use is $9.75\%$. Therefore, if the observation need to be in range for both $X_1$ and $X_2$, the average percent of observation will be:
+
+    $$
+    \begin{gather}
+    Percent\ observation = 0.0975^2 \\
+    = 0.95\%
+    \end{gather}
+    $$
+
+c.  Now suppose that we have a set of observations on $p = 100$ features. Again the observations are uniformly distributed on each feature, and again each feature ranges in value from 0 to 1. We wish to predict a test observation's response using observations within the 10% of each feature's range that is closest to that test observation. What fraction of the available observations will we use to make the prediction?
+
+    **Solution** Applying the same principal as above questions, when we have $p = 100$ features, the average percent of observations will be:
+
+    $$
+    \begin{gather}
+    Percent\ observation = 0.0975^{100} \\
+    = 7.95\times{10^{-100}}\%
+    \end{gather}
+    $$
+
+    The percent will be very small and for practical purposes, it would be considered zero.
+
+d.  Using your answers to parts (a)--(c), argue that a drawback of KNN when $p$ is large is that there are very few training observations "near" any given test observation.
+
+    **Solution** From what we calculated above, as the number of dimensions $p$ increase, the percent observations will quickly reaches 0. Therefore, the more features that we have, the fewer training observation will be "near" any given test observation.
+
+e.  Now suppose that we wish to make a prediction for a test observation by creating a $p$-dimensional hypercube centered around the test observation that contains, on average, 10% of the training observations. For $p = 1,2,$ and $100$, what is the length of each side of the hypercube? Comment on your answer.
+
+    *Note: A hypercube is a generalization of a cube to an arbitrary number of* *dimensions. When* $p = 1$, a hypercube is simply a line segment, when $p = 2$ *it is a square, and when* $p = 100$ it is a 100-dimensional cube.
+
+    **Solution** If the data is uniformly distributed in the unit $p$-dimensional space $[0,1]^p$, the fraction of the total volume occupied by the hypercube is given by:
+
+    $$
+    \begin{align}
+    l^p = 0.1 \\
+    l = 0.1^{\frac{1}{p}}
+    \end{align}
+    $$
+
+    For $p = 1$,
+
+    $$
+    \begin{align}
+    l = 0.1^{\frac{1}{1}} = 0.1
+    \end{align}
+    $$
+
+    For $p = 2$,
+
+    $$
+    \begin{align}
+    l = 0.1^{\frac{1}{2}} = \sqrt{0.1} \approx 0.316
+    \end{align}
+    $$
+
+    For $p = 100$,
+
+    $$
+    \begin{align}
+    l = 0.1^{\frac{1}{100}} \approx 0.977
+    \end{align}
+    $$
+
+    As $p$ increases, $l$ gets closer to 1. This means that in high-dimensional spaces, we must take almost the entire space (nearly the full unit cube) to capture 10% of the training observations. This illustrates the curse of dimensionality—in high dimensions, data points become extremely sparse, making methods like KNN less effective because even large neighborhoods may still contain few relevant points.
