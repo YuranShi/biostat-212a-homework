@@ -1,0 +1,610 @@
+---
+title: "Biostat 212a Homework 4"
+subtitle: "Due Mar. 4, 2025 @ 11:59PM"
+author: "Molly Shi (UID: 906558988)"
+date: today
+format:
+  html:
+    theme: cosmo
+    embed-resources: true
+    number-sections: true
+    toc: true
+    toc-depth: 4
+    toc-location: left
+    code-fold: false
+engine: knitr
+knitr:
+  opts_chunk: 
+    fig.align: 'center'
+    # fig.width: 6
+    # fig.height: 4
+    message: FALSE
+    cache: false
+---
+
+```{r setup, message=FALSE}
+library(ISLR2)
+library(tidymodels)
+library(tidyverse)
+library(ranger)
+library(GGally)
+library(gtsummary)
+library(xgboost)
+library(dplyr)
+library(rpart.plot)
+library(vip)
+library(ggplot2)
+library(patchwork)
+library(ape)
+library(ggtree)
+```
+
+## ISL Exercise 8.4.3 (10pts)
+
+Consider the Gini index, classification error, and cross-entropy in a simple classification setting with two classes. Create a single plot that displays each of these quantities as a function of $\hat{p}_{m1}$. The $x$-axis should display $\hat{p}_{m1}$, ranging from 0 to 1, and the $y$-axis should display the value of the Gini index, classification error, and entropy.
+
+Hint: In a setting with two classes, $\hat{p}_{m1} = 1 - \hat{p}_{m2}$. You could make this plot by hand, but it will be much easier to make in R.
+
+**Solution**
+
+The Gini *index* is defined by
+
+$$G = \sum_{k=1}^{K} \hat{p}_{mk}(1 - \hat{p}_{mk})$$
+
+Cross entropy is given by
+
+$$D = -\sum_{k=1}^{K} \hat{p}_{mk}\log(\hat{p}_{mk})$$
+
+The classification error is
+
+$$E = 1 - \max_k(\hat{p}_{mk})$$
+
+```{r}
+p_hat_m1 <- seq(0, 1, length.out = 1000)
+
+gini_index <- 2 * p_hat_m1 * (1 - p_hat_m1)
+
+classification_error <- 1 - pmax(p_hat_m1, 1 - p_hat_m1)
+
+epsilon <- 1e-10
+cross_entropy <- - (p_hat_m1 * log(p_hat_m1 + epsilon) + (1 - p_hat_m1) * log(1 - p_hat_m1 + epsilon))
+
+df <- data.frame(
+  p_hat_m1 = rep(p_hat_m1, 3),
+  Value = c(gini_index, classification_error, cross_entropy),
+  Metric = rep(c("Gini Index", "Classification Error", "Cross-Entropy"), each = length(p_hat_m1))
+)
+
+# Plotting
+ggplot(df, aes(x = p_hat_m1, y = Value, color = Metric, linetype = Metric)) +
+  geom_line(size = 1) +
+  labs(title = "Comparison of Gini Index, Classification Error, and Cross-Entropy",
+       x = expression(hat(p)[m1]),
+       y = "Value") +
+  theme_minimal()
+```
+
+## ISL Exercise 8.4.4 (10pts)
+
+This question relates to the plots in Figure 8.14.
+
+![](figure_8.14.png)
+
+a.  Sketch the tree corresponding to the partition of the predictor space illustrated in the left-hand panel of Figure 8.14. The numbers inside the boxes indicate the mean of $Y$ within each region.
+
+    **Solution**
+
+    ```{r, fig.width=6, fig.height=6}
+    tree <- read.tree(text = "(((3:1.5,(10:1,0:1)A:1)B:1,15:2)C:1,5:2)D;")
+    tree$node.label <- c("X1 < 1", "X2 < 1", "X1 < 0", "X2 < 0")
+
+    # Plot tree with improved aesthetics
+    ggtree(tree, ladderize = FALSE) +
+      scale_x_reverse() + coord_flip() +
+      geom_tiplab(vjust = 2, hjust = 0.5) + 
+      geom_text2(aes(label = label, subset = !isTip), hjust = -0.1, vjust = -1) +
+      ggtitle("Decision Tree for Partition") +
+      theme_minimal()
+    ```
+
+b.  Create a diagram similar to the left-hand panel of Figure 8.14, using the tree illustrated in the right-hand panel of the same figure. You should divide up the predictor space into the correct regions, and indicate the mean for each region.
+
+    **Solution**
+
+    ```{r}
+    partition_lines <- data.frame(
+      x = c(NA, -1, 2, 0, 0, 1, 1), # NA for non-connected lines
+      xend = c(NA, 1, 1, 0, 1, 1, 2),
+      y = c(1, 1, 2, 2, 1, 0, 1),
+      yend = c(1, 2, 2, 1, 1, 1, 1),
+      color = c("red", "red", "red", "blue", "blue", "blue", "blue")
+    )
+
+    # Define text labels for regions
+    region_labels <- data.frame(
+      x = c(0, 1.5, -0.5, 1, 0.5),
+      y = c(0.5, 0.5, 1.5, 1.5, 2.5),
+      label = c("-1.80", "0.63", "-1.06", "0.21", "2.49")
+    )
+
+    # Create the partition plot
+    ggplot() +
+      geom_segment(data = partition_lines, aes(x = x, xend = xend, y = y, yend = yend, color = color), linetype = "dashed") +
+      geom_text(data = region_labels, aes(x = x, y = y, label = label), size = 5) +
+      scale_color_manual(values = c("red" = "red", "blue" = "blue")) +
+      labs(x = "X1", y = "X2", title = "Partition of Predictor Space") +
+      theme_minimal() +
+      theme(legend.position = "none")
+    ```
+
+## ISL Exercise 8.4.5 (10pts)
+
+Suppose we produce ten bootstrapped samples from a data set containing red and green classes. We then apply a classification tree to each bootstrapped sample and, for a specific value of $X$, produce 10 estimates of $P(\textrm{Class is Red}|X)$: $$0.1, 0.15, 0.2, 0.2, 0.55, 0.6, 0.6, 0.65, 0.7, \textrm{and } 0.75.$$There are two common ways to combine these results together into a single class prediction. One is the majority vote approach discussed in this chapter. The second approach is to classify based on the average probability. In this example, what is the final classification under each of these two approaches?
+
+**Solution**
+
+For majority vote approach, Each tree predicts a probability $P(\textrm{Class is Red}|X)$, and we classify based on whether this probability is greater than 0.5. If $P(\textrm{Class is Red}|X) > 0.5$, the prediction will be red and vice versa. Using the majority vote approach, the final classification result will be red.
+
+```{r}
+x <- c(0.1, 0.15, 0.2, 0.2, 0.55, 0.6, 0.6, 0.65, 0.7, 0.75)
+
+# Majority vote approach
+majority_vote <- ifelse(sum(x > 0.5) > length(x) / 2, "Red", "Green")
+cat("Majority Vote Classification:", majority_vote)
+```
+
+The average probability approach uses the average of the estimated probabilities to predict the class. Using the average probability approach, the final classification result will be green.
+
+```{r}
+# Average probability approach
+average_prob <- ifelse(mean(x) > 0.5, "Red", "Green")
+cat("Average Probability Classification:", average_prob)
+```
+
+## ISL Lab 8.3. `Boston` data set (30pts)
+
+Follow the machine learning workflow to train regression tree, random forest, and boosting methods for predicting `medv`. Evaluate out-of-sample performance on a test set.
+
+**Solution**
+
+```{r}
+# ================================
+# Train Test Split
+# ================================
+set.seed(42)
+
+data_split <- initial_split(Boston, prop = 0.8)
+train_set <- training(data_split)
+test_set <- testing(data_split)
+
+# Print training and test set dimensions
+cat("Training set dimension:",dim(train_set), "\n")
+cat("Test set dimension:", dim(test_set))
+```
+
+```{r}
+# ================================
+# Preprocessing
+# ================================
+data_recipe <- recipe(medv ~ ., data = train_set) %>%
+  step_naomit(medv) %>%
+  step_zv(all_numeric_predictors())
+
+data_recipe
+```
+
+```{r}
+# ================================
+# Regression Tree Model
+# ================================
+regtree_mod <- decision_tree(
+  cost_complexity = tune(),
+  tree_depth = tune(),
+  min_n = 5,
+  mode = "regression",
+  engine = "rpart"
+) 
+
+tree_wf <- workflow() %>% 
+  add_recipe(data_recipe) %>% 
+  add_model(regtree_mod)
+
+tree_param_grid <- grid_regular(cost_complexity(),
+                          tree_depth(),
+                          levels = c(100, 5))
+
+# ================================
+# Random Forest Model
+# ================================
+rf_mod <- rand_forest(
+    mode = "regression",
+    mtry = tune(),
+    trees = tune()
+  ) %>% 
+  set_engine("ranger", importance = "impurity")
+
+rf_wf <- workflow() %>% 
+  add_recipe(data_recipe) %>% 
+  add_model(rf_mod)
+
+rf_param_grid <- grid_regular(
+  trees(range = c(100L, 300L)),
+  mtry(range = c(1L, 5L)),
+  levels = c(3, 5)
+)
+
+# ================================
+# Boosting Model (XGBoost)
+# ================================
+boost_mod <- boost_tree(
+    mode = "regression",
+    trees = 1000,
+    tree_depth = tune(),
+    learn_rate = tune()
+  ) %>% 
+  set_engine("xgboost")
+
+boost_wf <- workflow() %>% 
+  add_recipe(data_recipe) %>% 
+  add_model(boost_mod)
+
+boost_param_grid <- grid_regular(
+  tree_depth(range = c(1L, 4L)),
+  learn_rate(range = c(-3, -0.5), trans = log10_trans()),
+  levels = c(3, 5)
+  )
+```
+
+```{r}
+# ================================
+# Cross-validation for All Models
+# ================================
+set.seed(42)
+folds <- vfold_cv(train_set, v = 5)
+
+# Tune and evaluate all models
+tune_and_select <- function(wf, param_grid) {
+  wf %>%
+    tune_grid(
+      resamples = folds,
+      grid = param_grid,
+      metrics = metric_set(rmse, rsq)
+    ) %>%
+    select_best(metric = "rmse")
+}
+
+best_tree <- tune_and_select(tree_wf, tree_param_grid)
+best_rf <- tune_and_select(rf_wf, rf_param_grid)
+best_boost <- tune_and_select(boost_wf, boost_param_grid)
+```
+
+```{r}
+# ================================
+# Finalize and Evaluate Models
+# ================================
+final_fit_and_evaluate <- function(wf, best_params, label) {
+  final_wf <- wf %>% finalize_workflow(best_params)
+  final_fit <- final_wf %>% last_fit(data_split)
+  cat("\n", label, "Test Metrics:\n")
+  print(final_fit %>% collect_metrics())
+  return(final_fit)
+}
+
+final_fit_tree <- final_fit_and_evaluate(tree_wf, best_tree, "Regression Tree")
+final_fit_rf <- final_fit_and_evaluate(rf_wf, best_rf, "Random Forest")
+final_fit_boost <- final_fit_and_evaluate(boost_wf, best_boost, "Boosting")
+```
+
+```{r}
+# ================================
+# Visualize Regression Tree Models
+# ================================
+final_tree <- extract_workflow(final_fit_tree) %>%
+  extract_fit_engine() %>%
+  rpart.plot(roundint = FALSE)
+```
+
+```{r, fig.width=6, fig.height=10}
+# ================================
+# Visualize Variable Importance
+# ================================
+plot_variable_importance <- function(final_fit, model_name) {
+  final_model <- final_fit %>%
+    extract_workflow() %>%  # Extract the workflow
+    extract_fit_parsnip()   # Extract the model
+  vip(final_model) +
+    labs(title = paste("Variable Importance in", model_name))
+}
+
+tree_var_importance <- plot_variable_importance(final_fit_tree, "Regression Tree")
+rf_var_importance <- plot_variable_importance(final_fit_rf, "Random Forest")
+boosting_var_importance <- plot_variable_importance(final_fit_boost, "Boosting")
+
+# Combine plots using patchwork
+(tree_var_importance) / (rf_var_importance) / (boosting_var_importance)
+```
+
+```{r}
+# ================================
+# Compare Model Performance
+# ================================
+# Function to extract model metrics
+extract_final_metrics <- function(final_fit, model_name) {
+  metrics <- final_fit %>%
+    collect_metrics() %>%
+    select(.metric, .estimate) %>%
+    pivot_wider(names_from = .metric, values_from = .estimate) %>%
+    mutate(Model = model_name)
+  
+  return(metrics)
+}
+
+# Collect metrics for each model
+metrics_tree <- extract_final_metrics(final_fit_tree, "Regression Tree")
+metrics_rf <- extract_final_metrics(final_fit_rf, "Random Forest")
+metrics_boost <- extract_final_metrics(final_fit_boost, "Boosting")
+
+# Combine results into a single dataframe
+final_results <- bind_rows(metrics_tree, metrics_rf, metrics_boost)
+
+# Print the final results
+print(final_results)
+```
+
+```{r, fig.width=12, fig.height=8}
+# ================================
+# Visualizing Model Performance
+# ================================
+# Function to create actual vs predicted plot
+plot_actual_vs_predicted <- function(final_fit, model_name) {
+  results <- collect_predictions(final_fit) # Extract predictions
+  
+  ggplot(results, aes(x = .pred, y = medv)) +
+    geom_point(alpha = 0.5) +
+    geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+    labs(title = paste(model_name, "- Actual vs. Predicted"),
+         x = "Predicted MEDV", y = "Actual MEDV") +
+    theme_minimal()
+}
+
+# Function to plot residuals
+plot_residuals <- function(final_fit, model_name) {
+  results <- collect_predictions(final_fit) %>%
+    mutate(residual = medv - .pred) # Compute residuals
+  
+  ggplot(results, aes(x = residual)) +
+    geom_histogram(fill = "steelblue", bins = 30, alpha = 0.7) +
+    labs(title = paste(model_name, "- Residual Distribution"),
+         x = "Residuals", y = "Count") +
+    theme_minimal()
+}
+
+# Generate plots for each model
+plot_tree_pred <- plot_actual_vs_predicted(final_fit_tree, "Regression Tree")
+plot_rf_pred <- plot_actual_vs_predicted(final_fit_rf, "Random Forest")
+plot_boost_pred <- plot_actual_vs_predicted(final_fit_boost, "Boosting")
+
+plot_tree_resid <- plot_residuals(final_fit_tree, "Regression Tree")
+plot_rf_resid <- plot_residuals(final_fit_rf, "Random Forest")
+plot_boost_resid <- plot_residuals(final_fit_boost, "Boosting")
+
+# Combine plots using patchwork
+(plot_tree_pred | plot_rf_pred | plot_boost_pred) /
+(plot_tree_resid | plot_rf_resid | plot_boost_resid)
+```
+
+## ISL Lab 8.3 `Carseats` data set (30pts)
+
+Follow the machine learning workflow to train classification tree, random forest, and boosting methods for classifying `Sales <= 8` versus `Sales > 8`. Evaluate out-of-sample performance on a test set.
+
+**Solution**
+
+```{r}
+# ================================
+# Train Test Split
+# ================================
+set.seed(42)
+
+data_split <- initial_split(Carseats, prop = 0.8)
+train_set <- training(data_split)
+test_set <- testing(data_split)
+
+# Print training and test set dimensions
+cat("Training set dimension:",dim(train_set), "\n")
+cat("Test set dimension:", dim(test_set))
+```
+
+```{r}
+# ================================
+# Preprocessing
+# ================================
+data_recipe <- recipe(Sales ~ ., data = train_set) %>%
+  # Convert Sales to binary class
+  step_mutate(Sales = factor(ifelse(Sales > 8, "High", "Low"))) %>%  
+  step_naomit(all_predictors()) %>%
+  step_dummy(all_nominal_predictors()) %>%
+  step_zv(all_numeric_predictors()) %>% 
+  step_normalize(all_numeric_predictors())
+
+data_recipe
+```
+
+```{r}
+# ================================
+# Classification Tree Model
+# ================================
+tree_mod <- decision_tree(
+  cost_complexity = tune(),
+  tree_depth = tune(),
+  min_n = 5,
+  mode = "classification",
+  engine = "rpart"
+) 
+
+tree_wf <- workflow() %>% 
+  add_recipe(data_recipe) %>% 
+  add_model(tree_mod)
+
+tree_param_grid <- grid_regular(cost_complexity(),
+                          tree_depth(),
+                          levels = c(100, 5))
+
+# ================================
+# Random Forest Model
+# ================================
+rf_mod <- rand_forest(
+    mode = "classification",
+    mtry = tune(),
+    trees = tune()
+  ) %>% 
+  set_engine("ranger", importance = "impurity")
+
+rf_wf <- workflow() %>% 
+  add_recipe(data_recipe) %>% 
+  add_model(rf_mod)
+
+rf_param_grid <- grid_regular(
+  trees(range = c(100L, 300L)),
+  mtry(range = c(1L, 5L)),
+  levels = c(3, 5)
+)
+
+# ================================
+# Boosting Model (XGBoost)
+# ================================
+boost_mod <- boost_tree(
+    mode = "classification",
+    trees = 1000,
+    tree_depth = tune(),
+    learn_rate = tune()
+  ) %>% 
+  set_engine("xgboost")
+
+boost_wf <- workflow() %>% 
+  add_recipe(data_recipe) %>% 
+  add_model(boost_mod)
+
+boost_param_grid <- grid_regular(
+  tree_depth(range = c(1L, 3L)),
+  learn_rate(range = c(-5, -2), trans = log10_trans()),
+  levels = c(3, 10)
+  )
+```
+
+```{r}
+# ================================
+# Cross-validation for All Models
+# ================================
+set.seed(42)
+folds <- vfold_cv(train_set, v = 5)
+
+# Tune and select best models
+tune_and_select <- function(wf, param_grid) {
+  wf %>%
+    tune_grid(
+      resamples = folds,
+      grid = param_grid,
+      metrics = metric_set(accuracy, roc_auc)  # Use classification metrics
+    ) %>%
+    select_best(metric = "accuracy")  # Optimize for accuracy
+}
+
+best_tree <- tune_and_select(tree_wf, tree_param_grid)
+best_rf <- tune_and_select(rf_wf, rf_param_grid)
+best_boost <- tune_and_select(boost_wf, boost_param_grid)
+```
+
+```{r}
+# ================================
+# Finalize and Evaluate Models
+# ================================
+final_fit_and_evaluate <- function(wf, best_params, label) {
+  final_wf <- wf %>% finalize_workflow(best_params)
+  final_fit <- final_wf %>% last_fit(data_split)
+  cat("\n", label, "Test Metrics:\n")
+  print(final_fit %>% collect_metrics())  # Classification metrics
+  return(final_fit)
+}
+
+final_fit_tree <- final_fit_and_evaluate(tree_wf, best_tree, "Classification Tree")
+final_fit_rf <- final_fit_and_evaluate(rf_wf, best_rf, "Random Forest")
+final_fit_boost <- final_fit_and_evaluate(boost_wf, best_boost, "Boosting")
+```
+
+```{r}
+# ================================
+# Visualize Regression Tree Models
+# ================================
+final_tree <- extract_workflow(final_fit_tree) %>%
+  extract_fit_engine() %>%
+  rpart.plot(roundint = FALSE)
+```
+
+```{r, fig.width=6, fig.height=10}
+# ================================
+# Visualize Variable Importance
+# ================================
+plot_variable_importance <- function(final_fit, model_name) {
+  final_model <- final_fit %>%
+    extract_workflow() %>%  # Extract the workflow
+    extract_fit_parsnip()   # Extract the model
+  vip(final_model) +
+    labs(title = paste("Variable Importance in", model_name))
+}
+
+tree_var_importance <- plot_variable_importance(final_fit_tree, "Regression Tree")
+rf_var_importance <- plot_variable_importance(final_fit_rf, "Random Forest")
+boosting_var_importance <- plot_variable_importance(final_fit_boost, "Boosting")
+
+# Combine plots using patchwork
+(tree_var_importance) / (rf_var_importance) / (boosting_var_importance)
+```
+
+```{r}
+# ================================
+# Compare Model Performance
+# ================================
+# Function to extract model metrics
+extract_final_metrics <- function(final_fit, model_name) {
+  metrics <- final_fit %>%
+    collect_metrics() %>%
+    select(.metric, .estimate) %>%
+    pivot_wider(names_from = .metric, values_from = .estimate) %>%
+    mutate(Model = model_name)
+  
+  return(metrics)
+}
+
+# Collect metrics for each model
+metrics_tree <- extract_final_metrics(final_fit_tree, "Regression Tree")
+metrics_rf <- extract_final_metrics(final_fit_rf, "Random Forest")
+metrics_boost <- extract_final_metrics(final_fit_boost, "Boosting")
+
+# Combine results into a single dataframe
+final_results <- bind_rows(metrics_tree, metrics_rf, metrics_boost)
+
+# Print the final results
+print(final_results)
+```
+
+```{r, fig.width=12, fig.height=5}
+# ================================
+# Visualizing Model Performance
+# ================================
+plot_conf_matrix <- function(final_fit, model_name) {
+  predictions <- collect_predictions(final_fit)
+  
+  conf_mat <- conf_mat(predictions, truth = Sales, estimate = .pred_class) %>%
+    autoplot(type = "heatmap") +
+    labs(title = paste("Confusion Matrix for", model_name))
+  
+  return(conf_mat)
+}
+
+tree_cm <- plot_conf_matrix(final_fit_tree, "Classification Tree")
+rf_cm <- plot_conf_matrix(final_fit_rf, "Random Forest")
+boost_cm <- plot_conf_matrix(final_fit_boost, "Boosting")
+
+# Combine plots using patchwork
+(tree_cm | rf_cm | boost_cm)
+```
