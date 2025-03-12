@@ -1,0 +1,357 @@
+---
+title: "Biostat 212a Homework 5"
+subtitle: "Due Mar 16, 2024 @ 11:59PM"
+author: "Molly Shi (UID: 906558988)"
+date: today
+format:
+  html:
+    theme: cosmo
+    embed-resources: true
+    number-sections: true
+    toc: true
+    toc-depth: 4
+    toc-location: left
+    code-fold: false
+engine: knitr
+knitr:
+  opts_chunk: 
+    fig.align: 'center'
+    # fig.width: 6
+    # fig.height: 4
+    message: FALSE
+    cache: false
+editor: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, message=FALSE}
+library(ggplot2)
+library(ISLR2)
+library(tidymodels)
+library(tidyverse)
+library(gtsummary)
+library(kernlab)
+library(doParallel)
+library(vip)
+```
+
+## ISL Exercise 9.7.1 (10pts)
+
+This problem involves hyperplanes in two dimensions.
+
+a.  Sketch the hyperplane $1 + 3X_1 - X_2 = 0$. Indicate the set of
+    points for which $1 + 3X_1 - X_2 > 0$, as well as the set of points
+    for which$1 + 3X_1 - X_2 < 0$.
+
+    **Solution**
+
+    ```{r}
+    # Define the limits for the plot
+    xlim <- c(-15, 15)
+    ylim <- c(-15, 15)
+
+    # Create a grid of points
+    points <- expand.grid(
+      X1 = seq(xlim[1], xlim[2], length.out = 50),
+      X2 = seq(ylim[1], ylim[2], length.out = 50)
+    )
+
+    # Plot the hyperplane 1 + 3X1 - X2 = 0
+    plot <- ggplot(points, aes(x = X1, y = X2)) +
+      geom_abline(intercept = 1, slope = 3, show.legend = TRUE) +
+      geom_hline(yintercept = 0, color = "gray") +
+      geom_vline(xintercept = 0, color = "gray") +
+      theme_bw() +
+      labs(title = "Hyperplane 1 + 3X1 - X2 = 0")
+
+    # Add points with color indicating the condition 1 + 3X1 - X2 > 0
+    plot <- plot + geom_point(aes(color = 1 + 3 * X1 - X2 > 0), size = 0.1) +
+      scale_color_discrete(name = "Condition",
+                           labels = c("1 + 3X1 - X2 <= 0", "1 + 3X1 - X2 > 0"))
+
+    plot
+    ```
+
+b.  On the same plot, sketch the hyperplane $-2 + X_1 + 2X_2 = 0$.
+    Indicate the set of points for which $-2 + X_1 + 2X_2 > 0$, as well
+    as the set of points for which $-2 + X_1 + 2X_2 < 0$.
+
+    **Solution**
+
+    ```{r}
+    plot <- plot + geom_abline(intercept = 1, slope = -1 / 2, color = "blue", show.legend = TRUE) +
+      geom_point(aes(color = interaction(1 + 3 * X1 - X2 > 0, -2 + X1 + 2 * X2 > 0)),
+                 size = 0.1) +
+      labs(title = "Hyperplanes 1 + 3X1 - X2 = 0 and -2 + X1 + 2X2 = 0") +
+      scale_color_discrete(name = "Condition")
+    plot
+    ```
+
+## ISL Exercise 9.7.2 (10pts)
+
+We have seen that in $p = 2$ dimensions, a linear decision boundary
+takes the form $\beta_0 + \beta_1X_1 + \beta_2X_2 = 0$. We now
+investigate a non-linear decision boundary.
+
+a.  Sketch the curve $$(1+X_1)^2 +(2-X_2)^2 = 4$$
+
+    **Solution**
+
+    ```{r}
+    # Create a grid of points
+    points <- expand.grid(
+      X1 = seq(-4, 2, length.out = 100),
+      X2 = seq(-1, 5, length.out = 100)
+    )
+
+    # Plot the curve
+    plot <- ggplot(points, aes(x = X1, y = X2, z = (1 + X1)^2 + (2 - X2)^2 - 4)) +
+      geom_contour(breaks = 0, colour = "black") +
+      labs(title = expression((1 + X[1])^2 + (2 - X[2])^2 == 4)) +
+      theme_bw()
+    plot
+    ```
+
+<!-- -->
+
+b.  On your sketch, indicate the set of points for which
+    $$(1 + X_1)^2 + (2 - X_2)^2 > 4,$$ as well as the set of points for
+    which $$(1 + X_1)^2 + (2 - X_2)^2 \leq 4.$$
+
+    **Solution**
+
+    ```{r}
+    plot <- plot + geom_point(aes(color = (1 + X1)^2 + (2 - X2)^2 > 4), size = 0.1) +
+      scale_color_discrete(name = "Condition",
+                         labels = c(expression((1 + X[1])^2 + (2 - X[2])^2 <= 4),
+                                    expression((1 + X[1])^2 + (2 - X[2])^2 > 4))) +
+      labs(title = expression((1 + X[1])^2 + (2 - X[2])^2 > 4 ~ "and" ~ (1 + X[1])^2 + (2 - X[2])^2 <= 4))
+
+    plot
+    ```
+
+<!-- -->
+
+c.  Suppose that a classifier assigns an observation to the blue class
+    if $$(1+ X_1)^2 + (2 - X_2)^2 > 4,$$ and to the red class otherwise.
+    To what class is the observation $(0, 0)$ classified? $(-1, 1)$?
+    $(2, 2)$? $(3, 8)$?
+
+    **Solution**
+
+    ```{r}
+    points <- data.frame(
+      X1 = c(0, -1, 2, 3),
+      X2 = c(0, 1, 2, 8)
+    )
+
+    # Classify the points
+    classification <- ifelse((1 + points$X1)^2 + (2 - points$X2)^2 > 4, "blue", "red")
+    classified_points <- cbind(points, class = classification)
+
+    classified_points
+    ```
+
+d.  Argue that while the decision boundary in (c) is not linear in terms
+    of $X_1$ and $X_2$, it is linear in terms of $X_1$, $X_1^2$, $X_2$,
+    and $X_2^2$.
+
+    **Solution**
+
+    The decision boundary is given by:
+    $$(1 + X_1)^2 + (2 - X_2)^2 - 4 = 0$$
+
+    Expanding this, we get:
+    $$1 + 2X_1 + X_1^2 + 4 - 4X_2 + X_2^2 - 4 = 0$$ which simplifies to:
+    $$X_1^2 + X_2^2 + 2X_1 - 4X_2 + 1 = 0$$
+
+    This equation is linear in terms of $X_1, X_1^2, X_2,$ and $X_2^2$.
+    Therefore, while the decision boundary is not linear in $X_1$ and
+    $X_2$, it is indeed linear when considering the terms
+    $X_1, X_1^2, X_2$, and $X_2^2$.
+
+## Support vector machines (SVMs) on the `Carseats` data set (30pts)
+
+Follow the machine learning workflow to train support vector classifier
+(same as SVM with linear kernel), SVM with polynomial kernel (tune the
+degree and regularization parameter $C$), and SVM with radial kernel
+(tune the scale parameter $\gamma$ and regularization parameter $C$) for
+classifying `Sales<=8` versus `Sales>8`. Use the same seed as in your
+HW4 for the initial test/train split and compare the final test AUC and
+accuracy to those methods you tried in HW4.
+
+**Solution**
+
+```{r}
+# ================================
+# Train Test Split
+# ================================
+set.seed(42)
+
+data_split <- initial_split(Carseats, prop = 0.8)
+train_set <- training(data_split)
+test_set <- testing(data_split)
+
+# Print training and test set dimensions
+cat("Training set dimension:",dim(train_set), "\n")
+cat("Test set dimension:", dim(test_set))
+```
+
+```{r}
+# ================================
+# Preprocessing
+# ================================
+svm_recipe <- recipe(Sales ~., data = train_set) |>
+  # Convert Sales to binary class
+  step_mutate(Sales = factor(ifelse(Sales > 8, "High", "Low"))) |>
+  step_dummy(all_nominal_predictors()) |>
+  step_zv(all_numeric_predictors()) |>
+  step_normalize(all_numeric_predictors())
+
+svm_recipe
+```
+
+```{r}
+# ================================
+# SVM Model
+# ================================
+svm_mod <- 
+  svm_poly(
+    mode = "classification",
+    cost = tune(),
+    degree = tune(),
+    # scale_factor = tune()
+  ) %>% 
+  set_engine("kernlab")
+
+svm_wf <- workflow() %>%
+  add_recipe(svm_recipe) %>%
+  add_model(svm_mod)
+
+param_grid <- grid_regular(
+  cost(range = c(-3, 2)),
+  degree(range = c(1, 5)),
+  #scale_factor(range = c(-1, 1)),
+  levels = c(5)
+  )
+```
+
+```{r}
+# ================================
+# Cross-validation
+# ================================
+set.seed(42)
+folds <- vfold_cv(train_set, v = 5)
+
+svm_fit <- svm_wf |>
+  tune_grid(
+    resamples = folds,
+    grid = param_grid,
+    metrics = metric_set(roc_auc, accuracy)
+  )
+
+svm_fit %>%
+  collect_metrics() %>%
+  print(width = Inf) %>%
+  filter(.metric == "roc_auc" ) %>%
+  ggplot(mapping = aes(x = degree, y = mean)) +
+  geom_point() +
+  geom_line() +
+  labs(x = "Cost", y = "CV AUC") +
+  scale_x_log10()
+```
+
+```{r}
+best_svm <- svm_fit %>%
+  select_best(metric ="roc_auc")
+best_svm
+```
+
+```{r}
+# ================================
+# Finalize SVM Model
+# ================================
+final_wf <- svm_wf |>
+  finalize_workflow(best_svm)
+
+final_fit <- final_wf |>
+  last_fit(data_split)
+
+final_fit |> collect_metrics()
+```
+
+```{r}
+# ================================
+# Evaluate SVM Model
+# ================================
+set.seed(42)
+split_obj <- initial_split(data = Carseats, prop = 0.7, strata = Sales)
+train <- training(split_obj)
+test <- testing(split_obj)
+
+recipe_obj <- svm_recipe |> prep()
+
+# Bake
+train <- bake(recipe_obj, new_data = train)
+test <- bake(recipe_obj, new_data = test)
+
+final_fit %>% 
+  pluck(".workflow", 1) %>%   
+  pull_workflow_fit() %>% 
+  vip(method = "permute", 
+      target = "Sales", metric = "accuracy",
+      pred_wrapper = kernlab::predict, train = train)
+```
+
+```{r}
+svm_rbf_spec <- svm_rbf() %>%
+  set_mode("classification") %>%
+  set_engine("kernlab")
+
+svm_rbf_fit <- svm_rbf_spec %>%
+  fit(Sales ~ ., data = train[, c('Price', 'ShelveLoc_Good', 'Sales')])
+
+svm_rbf_fit %>%
+  extract_fit_engine() %>%
+  plot()
+```
+
+## Bonus (10pts)
+
+Let $$
+f(X) = \beta_0 + \beta_1 X_1 + \cdots + \beta_p X_p = \beta_0 + \beta^T X. 
+$$ Then $f(X)=0$ defines a hyperplane in $\mathbb{R}^p$. Show that
+$f(x)$ is proportional to the signed distance of a point $x$ to the
+hyperplane $f(X) = 0$.
+
+**Solution** Let the hyperplane in $\mathbb{R}^p$ be defined by:
+
+$$
+f(X) = \beta_0 + \beta^T X = 0.
+$$
+
+The signed distance of a point $x$ from the hyperplane is given by:
+
+$$
+d(x) = \frac{f(x)}{\|\beta\|} = \frac{\beta_0 + \beta^T x}{\|\beta\|}.
+$$
+
+The distance from a point $x$ to the hyperplane is the perpendicular
+distance, which is obtained by projecting $x$ onto the normal vector
+$\beta$ of the hyperplane. The unit normal vector to the hyperplane is:
+
+$$
+\hat{\beta} = \frac{\beta}{\|\beta\|}.
+$$
+
+The projection of $x$ onto this unit normal gives:
+
+$$
+d(x) = \frac{f(x)}{\|\beta\|}.
+$$
+
+Since the numerator is simply $f(x)$, we conclude that $f(x)$ is
+proportional to the signed distance, with the proportionality constant
+being $\|\beta\|$. The sign of $f(x)$ determines on which side of the
+hyperplane the point $x$ lies.
