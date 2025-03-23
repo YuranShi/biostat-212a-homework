@@ -1,0 +1,597 @@
+---
+title: "Biostat 212a Homework 6"
+subtitle: "Due Mar 22, 2025 @ 11:59PM"
+author: "Molly Shi (UID: 906558988)"
+date: today
+format:
+  html:
+    theme: cosmo
+    embed-resources: true
+    number-sections: true
+    toc: true
+    toc-depth: 4
+    toc-location: left
+    code-fold: false
+engine: knitr
+knitr:
+  opts_chunk: 
+    fig.align: 'center'
+    # fig.width: 6
+    # fig.height: 4
+    message: FALSE
+    cache: false
+---
+
+> Note: Since the cross validation takes a long time to train on my local machine, I set the `eval` parameter to `FALSE` for the cross validation code chunks. For the complete results for the cross validation, please refer to my [Colab Notebook](https://colab.research.google.com/drive/1PbrqAw7BuEzy9_mFwUXNd-5XFE8Ozl9T?usp=sharing).
+
+Load R libraries.
+
+```{r, message=FALSE}
+library(tidyverse)
+library(tidymodels)
+library(readr)
+library(tswge)
+library(ggplot2)
+library(ranger)
+library(umap)
+
+acfdf <- function(vec) {
+    vacf <- acf(vec, plot = F) 
+    with(vacf, data.frame(lag, acf))
+}
+
+ggacf <- function(vec) {
+    ac <- acfdf(vec)
+    ggplot(data = ac, aes(x = lag, y = acf)) + geom_hline(aes(yintercept = 0)) + 
+        geom_segment(mapping = aes(xend = lag, yend = 0))
+}
+
+tplot <- function(vec) {
+    df <- data.frame(X = vec, t = seq_along(vec))
+    ggplot(data = df, aes(x = t, y = X)) + geom_line()
+}
+```
+
+## New York Stock Exchange (NYSE) data (1962-1986) (140 pts)
+
+::: {#fig-nyse}
+<p align="center">
+
+![](ISL_fig_10_14.png){width="600px" height="600px"}
+
+</p>
+
+Historical trading statistics from the New York Stock Exchange. Daily values of the normalized log trading volume, DJIA return, and log volatility are shown for a 24-year period from 1962-1986. We wish to predict trading volume on any day, given the history on all earlier days. To the left of the red bar (January 2, 1980) is training data, and to the right test data.
+:::
+
+The [`NYSE.csv`](https://raw.githubusercontent.com/ucla-biostat-212a/2025winter/master/slides/data/NYSE.csv) file contains three daily time series from the New York Stock Exchange (NYSE) for the period Dec 3, 1962-Dec 31, 1986 (6,051 trading days).
+
+-   `Log trading volume` ($v_t$): This is the fraction of all outstanding shares that are traded on that day, relative to a 100-day moving average of past turnover, on the log scale.
+
+-   `Dow Jones return` ($r_t$): This is the difference between the log of the Dow Jones Industrial Index on consecutive trading days.
+
+-   `Log volatility` ($z_t$): This is based on the absolute values of daily price movements.
+
+```{r}
+# Read in NYSE data from url
+
+url = "https://raw.githubusercontent.com/ucla-biostat-212a/2025winter/master/slides/data/NYSE.csv"
+NYSE <- read_csv(url)
+
+NYSE
+```
+
+The **autocorrelation** at lag $\ell$ is the correlation of all pairs $(v_t, v_{t-\ell})$ that are $\ell$ trading days apart. These sizable correlations give us confidence that past values will be helpful in predicting the future.
+
+```{r}
+#| code-fold: true
+#| label: fig-nyse-autocor
+#| fig-cap: "The autocorrelation function for log volume. We see that nearby values are fairly strongly correlated, with correlations above 0.2 as far as 20 days apart."
+
+ggacf(NYSE$log_volume) + ggthemes::theme_few()
+
+```
+
+Do a similar plot for (1) the correlation between $v_t$ and lag $\ell$ `Dow Jones return` $r_{t-\ell}$ and (2) correlation between $v_t$ and lag $\ell$ `Log volatility` $z_{t-\ell}$.
+
+```{r}
+seq(1, 30) %>% 
+  map(function(x) {cor(NYSE$log_volume , lag(NYSE$DJ_return, x), use = "pairwise.complete.obs")}) %>% 
+  unlist() %>% 
+  tibble(lag = 1:30, cor = .) %>% 
+  ggplot(aes(x = lag, y = cor)) + 
+  geom_hline(aes(yintercept = 0)) + 
+  geom_segment(mapping = aes(xend = lag, yend = 0)) + 
+  ggtitle("AutoCorrelation between `log volume` and lagged `DJ return`")
+```
+
+```{r}
+seq(1, 30) %>% 
+  map(function(x) {cor(NYSE$log_volume , lag(NYSE$log_volatility, x), use = "pairwise.complete.obs")}) %>% 
+  unlist() %>% 
+  tibble(lag = 1:30, cor = .) %>% 
+  ggplot(aes(x = lag, y = cor)) + 
+  geom_hline(aes(yintercept = 0)) + 
+  geom_segment(mapping = aes(xend = lag, yend = 0)) + 
+  ggtitle("AutoCorrelation between `log volume` and lagged `log volatility`")
+```
+
+### Project goal
+
+Our goal is to forecast daily `Log trading volume`, using various machine learning algorithms we learnt in this class.
+
+The data set is already split into train (before Jan 1st, 1980, $n_{\text{train}} = 4,281$) and test (after Jan 1st, 1980, $n_{\text{test}} = 1,770$) sets.
+
+<!-- Include `day_of_week` as a predictor in the models. -->
+
+In general, we will tune the lag $L$ to acheive best forecasting performance. In this project, we would fix $L=5$. That is we always use the previous five trading days' data to forecast today's `log trading volume`.
+
+Pay attention to the nuance of splitting time series data for cross validation. Study and use the [`time-series`](https://www.tidymodels.org/learn/models/time-series/) functionality in tidymodels. Make sure to use the same splits when tuning different machine learning algorithms.
+
+Use the $R^2$ between forecast and actual values as the cross validation and test evaluation criterion.
+
+```{r}
+# ================================
+# Data Preparation
+# ================================
+NYSE <- NYSE |> 
+  mutate(
+    lag_log_volume_1 = lag(log_volume, 1),
+    lag_log_volume_2 = lag(log_volume, 2),
+    lag_log_volume_3 = lag(log_volume, 3),
+    lag_log_volume_4 = lag(log_volume, 4),
+    lag_log_volume_5 = lag(log_volume, 5)
+  )
+
+train_set <- NYSE |> filter(train == TRUE) |> drop_na()
+test_set <- NYSE |> filter(train == FALSE) |> drop_na()
+```
+
+```{r}
+# ================================
+# Evaluation Metric -- R^2
+# ================================
+r_squared <- function(actual, predicted) {
+  ss_res <- sum((actual - predicted)^2)
+  ss_tot <- sum((actual - mean(actual))^2)
+  1 - (ss_res / ss_tot)
+}
+```
+
+### Baseline method (20 pts)
+
+We use the straw man (use yesterday’s value of `log trading volume` to predict that of today) as the baseline method. Evaluate the $R^2$ of this method on the test data.
+
+```{r}
+# ================================
+# Baseline -- Straw-man Model
+# ================================
+baseline_pred <- NYSE |>
+  mutate(log_volume_pred = lag(log_volume)) |>
+  filter(train == FALSE)
+
+# Compute R^2 for baseline
+baseline_r2 <- r_squared(baseline_pred$log_volume, 
+                         baseline_pred$log_volume_pred)
+
+cat("Baseline R^2:", baseline_r2)
+```
+
+### Autoregression (AR) forecaster (30 pts)
+
+-   Let $$
+    y = \begin{pmatrix} v_{L+1} \\ v_{L+2} \\ v_{L+3} \\ \vdots \\ v_T \end{pmatrix}, \quad M = \begin{pmatrix}
+    1 & v_L & v_{L-1} & \cdots & v_1 \\
+    1 & v_{L+1} & v_{L} & \cdots & v_2 \\
+    \vdots & \vdots & \vdots & \ddots & \vdots \\
+    1 & v_{T-1} & v_{T-2} & \cdots & v_{T-L}
+    \end{pmatrix}.
+    $$
+
+-   Fit an ordinary least squares (OLS) regression of $y$ on $M$, giving $$
+    \hat v_t = \hat \beta_0 + \hat \beta_1 v_{t-1} + \hat \beta_2 v_{t-2} + \cdots + \hat \beta_L v_{t-L},
+    $$ known as an **order-**$L$ autoregression model or **AR(**$L$).
+
+-   Tune AR(5) with elastic net (lasso + ridge) regularization using all 3 features on the training data, and evaluate the test performance.
+
+-   Hint: [Workflow: Lasso](https://ucla-biostat-212a.github.io/2025winter/slides/06-modelselection/workflow_lasso.html) is a good starting point.
+
+```{r}
+# ================================
+# AR Forecaster Model
+# ================================
+set.seed(42)
+# Define recipe
+ar5_recipe <- recipe(log_volume ~ ., data = train_set) |> 
+  update_role(date, new_role = "ID") |> 
+  step_integer(day_of_week, -all_outcomes()) |> 
+  step_zv(all_predictors()) |> 
+  step_normalize(all_predictors())
+
+# Define model (Elastic Net with tuning)
+lasso_mod <- linear_reg(penalty = tune(), mixture = 1.0) |> 
+  set_engine("glmnet")
+
+# Define workflow
+ar5_lasso_workflow <- workflow() |> 
+  add_model(lasso_mod) |> 
+  add_recipe(ar5_recipe)
+```
+
+```{r, eval=FALSE}
+# ================================
+# AR Forecaster CV
+# ================================
+# Cross-validation setup for time series
+cv_folds <- rolling_origin(train_set,
+                           initial = as.integer(0.8 * nrow(train_set)),
+                           assess = as.integer(0.2 * nrow(train_set) / 5),
+                           skip = as.integer(0.2 * nrow(train_set) / 5),
+                           cumulative = TRUE)
+
+# Define tuning grid
+lambda_grid <- grid_regular(penalty(range = c(-2, 1.5), 
+                                    trans = log10_trans()), 
+                            levels = 50)
+
+# Tune hyperparameters
+tune_results <- tune_grid(
+  ar5_lasso_workflow,
+  resamples = cv_folds,
+  grid = lambda_grid,
+  metrics = metric_set(rsq),
+  control = control_grid(save_pred = TRUE, verbose = TRUE)  # Verbose mode
+)
+
+# Get the best parameter
+best_params <- select_best(tune_results, metric = "rsq")
+print(best_params)
+
+# Get the CV metric
+ar5_cv_metrics <- collect_metrics(tune_results) |>
+  slice_max(mean, n = 1)
+cat("\n", "AR(5) Elastic Net CV R^2:", ar5_cv_metrics$mean)
+```
+
+```{r}
+# ================================
+# AR Forecaster Evaluation
+# ================================
+# Build a new model using tuned parameter penalty = 0.01
+lasso_mod_final <- linear_reg(penalty = 0.01, mixture = 1.0) |> 
+  set_engine("glmnet")
+
+# Define workflow with the final model
+ar5_lasso_final_workflow <- workflow() |> 
+  add_model(lasso_mod_final) |> 
+  add_recipe(ar5_recipe)
+
+# Fit the final model on the training data
+lasso_final_fit <- fit(ar5_lasso_final_workflow, data = train_set)
+
+# Predict on test set
+test_preds <- predict(lasso_final_fit, new_data = test_set) |> 
+  bind_cols(test_set)
+
+# Compute R^2 for the final model on the test set
+lasso_ar5_r2 <- r_squared(test_preds$log_volume, test_preds$.pred)
+cat("AR(5) Elastic Net Test R^2:", lasso_ar5_r2, "\n")
+```
+
+### Random forest forecaster (30pts)
+
+-   Use the same features as in AR($L$) for the random forest. Tune the random forest and evaluate the test performance.
+
+-   Hint: [Workflow: Random Forest for Prediction](https://ucla-biostat-212a.github.io/2025winter/slides/08-tree/workflow_rf_reg.html) is a good starting point.
+
+```{r}
+# ================================
+# Random Forest Forecaster Model
+# ================================
+# Define recipe
+rf_recipe <- recipe(log_volume ~ ., data = train_set) |>
+  update_role(date, new_role = "ID") |>
+  step_zv(all_predictors())
+
+# Define model (Random Forest with tuning)
+rf_mod <- rand_forest(mtry = tune(), trees = tune()) |>
+  set_engine("ranger") |>
+  set_mode("regression")
+
+# Define workflow
+rf_workflow <- workflow() |>
+  add_model(rf_mod) |>
+  add_recipe(rf_recipe)
+```
+
+```{r, eval=FALSE}
+# ================================
+# Random Forest Forecaster CV
+# ================================
+# Cross-validation setup for time series
+set.seed(42)
+cv_folds <- rolling_origin(train_set,
+                           initial = as.integer(0.8 * nrow(train_set)),
+                           assess = as.integer(0.2 * nrow(train_set) / 5),
+                           skip = as.integer(0.2 * nrow(train_set) / 5),
+                           cumulative = TRUE)
+
+# Define tuning grid
+rf_grid <- grid_regular(
+  trees(range = c(500, 800)),
+  mtry(range = c(4, 6)),
+  levels = 4
+)
+# Tune hyperparameters
+rf_tune_results <- tune_grid(
+  rf_workflow,
+  resamples = cv_folds,
+  grid = rf_grid,
+  metrics = metric_set(rsq),
+  control = control_grid(save_pred = TRUE, verbose = TRUE)  # Verbose mode
+)
+
+# Get the best parameters
+best_rf_params <- select_best(rf_tune_results, metric = "rsq")
+print(best_rf_params)
+
+# Get the CV metric
+rf_cv_metrics <- collect_metrics(rf_tune_results) |>
+  slice_max(mean, n = 1)
+cat("\n", "Random Forest CV R^2:", rf_cv_metrics$mean)
+
+```
+
+```{r}
+# ================================
+# Random Forest Forecaster Evaluation
+# ================================
+set.seed(42)
+# Define final model with best parameters
+rf_mod_final <- rand_forest(
+  trees = 800,
+  mtry = 4
+) |> 
+  set_engine("ranger") |> 
+  set_mode("regression")
+
+# Define workflow with the final model
+rf_final_workflow <- workflow() |> 
+  add_model(rf_mod_final) |> 
+  add_recipe(rf_recipe)
+
+# Fit the final model on the training data
+rf_final_fit <- fit(rf_final_workflow, data = train_set)
+
+# Predict on test set
+rf_test_preds <- predict(rf_final_fit, new_data = test_set) |> 
+  bind_cols(test_set)
+
+# Compute R^2 for the final model on the test set
+rf_test_r2 <- r_squared(rf_test_preds$log_volume, rf_test_preds$.pred)
+cat("Random Forest Test R^2:", rf_test_r2, "\n")
+```
+
+### Boosting forecaster (30pts)
+
+-   Use the same features as in AR($L$) for the boosting. Tune the boosting algorithm and evaluate the test performance.
+
+-   Hint: [Workflow: Boosting tree for Prediction](https://ucla-biostat-212a.github.io/2025winter/slides/08-tree/workflow_boosting_reg.html) is a good starting point.
+
+```{r}
+# ================================
+# Boosting Forecaster Model
+# ================================
+# Define recipe
+boost_recipe <- recipe(log_volume ~ ., data = train_set) |> 
+  update_role(date, new_role = "ID") |> 
+  step_dummy(all_nominal(), -all_outcomes()) |> 
+  step_zv(all_predictors())
+
+# Define model (Boosting with tuning)
+boost_mod <- boost_tree(trees = tune(), learn_rate = 0.05, mtry = tune()) |> 
+  set_engine("xgboost") |> 
+  set_mode("regression")
+
+# Define workflow
+boost_workflow <- workflow() |> 
+  add_model(boost_mod) |> 
+  add_recipe(boost_recipe)
+```
+
+```{r, eval=FALSE}
+# ================================
+# Boosting Forecaster CV
+# ================================
+# Cross-validation setup for time series
+set.seed(42)
+cv_folds <- rolling_origin(train_set, 
+                           initial = as.integer(0.8 * nrow(train_set)), 
+                           assess = as.integer(0.2 * nrow(train_set) / 5), 
+                           skip = as.integer(0.2 * nrow(train_set) / 5), 
+                           cumulative = TRUE)
+
+# Define tuning grid
+boost_grid <- grid_regular(
+  trees(range = c(100, 500)),
+  mtry(range = c(2, 5)),
+  levels = 5
+)
+
+# Tune hyperparameters
+boost_tune_results <- tune_grid(
+  boost_workflow,
+  resamples = cv_folds,
+  grid = boost_grid,
+  metrics = metric_set(rsq),
+  control = control_grid(save_pred = TRUE, verbose = TRUE)
+)
+
+# Get the best parameters
+best_boost_params <- select_best(boost_tune_results, metric = "rsq")
+print(best_boost_params)
+
+# Get the CV metric
+boost_cv_metrics <- collect_metrics(boost_tune_results) |>
+  slice_max(mean, n = 1)
+cat("\n", "Boosting CV R^2:", boost_cv_metrics$mean)
+
+```
+
+```{r}
+# ================================
+# Boosting Forecaster Evaluation
+# ================================
+set.seed(42)
+# Define final model with best parameters
+boost_mod_final <- boost_tree(
+  trees = 200,
+  learn_rate = 0.05,
+  mtry = 2
+) |> 
+  set_engine("xgboost") |> 
+  set_mode("regression")
+
+# Define workflow with the final model
+boost_final_workflow <- workflow() |> 
+  add_model(boost_mod_final) |> 
+  add_recipe(boost_recipe)
+
+# Fit the final model on the training data
+boost_final_fit <- fit(boost_final_workflow, data = train_set)
+
+# Predict on test set
+boost_test_preds <- predict(boost_final_fit, new_data = test_set) |> 
+  bind_cols(test_set)
+
+# Compute R^2 for the final model on the test set
+boost_test_r2 <- r_squared(boost_test_preds$log_volume, boost_test_preds$.pred)
+cat("Boosting Test R^2:", boost_test_r2, "\n")
+
+```
+
+### Summary (30pts)
+
+Your score for this question is largely determined by your final test performance.
+
+Summarize the performance of different machine learning forecasters in the following format.
+
+|    Method     | CV $R^2$ | Test $R^2$ |     |
+|:-------------:|:--------:|:----------:|:---:|
+|   Baseline    |    NA    |   0.180    |     |
+|     AR(5)     |  0.525   |   0.432    |     |
+| Random Forest |  0.575   |   0.474    |     |
+|   Boosting    |  0.583   |   0.494    |     |
+
+## ISL Exercise 12.6.13 (90 pts)
+
+On the book website, `www.StatLearning.com`, there is a gene expression data set (`Ch12Ex13.csv`) that consists of 40 tissue samples with measurements on 1,000 genes. The first 20 samples are from healthy patients, while the second 20 are from a diseased group.
+
+```{r}
+data <- read.csv("Ch12Ex13.csv", header = FALSE)
+colnames(data) <- c(paste0("H", 1:20), paste0("D", 1:20))
+```
+
+### 12.6.13 (b) (30 pts)
+
+b.  Apply hierarchical clustering to the samples using correlation-based distance, and plot the dendrogram. Do the genes separate the samples into the two groups? Do your results depend on the type of linkage used?
+
+    **Solution**
+
+    ```{r}
+    # Compute the correlation-based distance matrix
+    cor_matrix <- cor(data)
+    dist_matrix <- as.dist(1 - cor_matrix)
+
+    # Perform hierarchical clustering with different linkage methods
+    methods <- c("complete", "average", "single")
+    for (method in methods) {
+      hc <- hclust(dist_matrix, method = method)
+      plot(hc, main = paste("Hierarchical Clustering -", method, "linkage"))
+    }
+    ```
+
+    In this data set, the hierarchical clustering results do indeed show a clear separation between the healthy and diseased samples, although slight variations appear depending on whether you use complete, average, or single linkage. The overall conclusion is that the genes effectively differentiate the two groups, but the exact cluster boundaries can shift based on the chosen linkage method.
+
+### PCA and UMAP (30 pts)
+
+**Solution**
+
+**Principal Component Analysis**
+
+```{r}
+# Transpose the data so that samples are rows and genes are columns
+data_t <- t(data)
+
+# Perform PCA on the transposed data
+pca_results <- prcomp(data_t, center = TRUE, scale. = TRUE)
+
+# Create a data frame for PCA results using the first two PCs
+pca_df <- data.frame(
+  PC1 = pca_results$x[, 1],
+  PC2 = pca_results$x[, 2],
+  Sample = rownames(pca_results$x)
+)
+
+# Assign sample groups based on sample names
+pca_df$Group <- ifelse(grepl("^H", pca_df$Sample), "Healthy", "Diseased")
+
+# Plot PCA results
+pca_plot <- ggplot(pca_df, aes(x = PC1, y = PC2, color = Group, label = Sample)) +
+  geom_point(size = 3) +
+  geom_text(vjust = -1, hjust = 0.5, size = 3) +
+  ggtitle("PCA of Gene Expression Samples") +
+  theme_minimal()
+print(pca_plot)
+```
+
+The PCA plot shows a clear separation between healthy and diseased samples along the first principal component (PC1), suggesting that the primary variance in gene expression is driven by disease status. This strong clustering indicates that the gene expression profiles of the two groups are distinct.
+
+**Uniform Manifold Approximation and Projection**
+
+```{r}
+# Perform UMAP analysis on the transposed data
+umap_results <- umap(data_t)
+
+# Extract the layout from the UMAP results which contains the embedding
+umap_layout <- umap_results$layout
+
+# Create a data frame for UMAP results using the first two UMAP dimensions
+umap_df <- data.frame(
+  UMAP1 = umap_layout[, 1],
+  UMAP2 = umap_layout[, 2],
+  Sample = rownames(data_t)
+)
+
+# Assign sample groups based on sample names
+umap_df$Group <- ifelse(grepl("^H", umap_df$Sample), "Healthy", "Diseased")
+
+# Plot UMAP results
+umap_plot <- ggplot(umap_df, aes(x = UMAP1, y = UMAP2, color = Group, label = Sample)) +
+  geom_point(size = 3) +
+  geom_text(vjust = -1, hjust = 0.5, size = 3) +
+  ggtitle("UMAP of Gene Expression Samples") +
+  theme_minimal()
+print(umap_plot)
+```
+
+The UMAP plot further reinforces the strong separation between healthy and diseased samples, with each group forming distinct clusters. Compared to PCA, UMAP shows even tighter grouping, suggesting that the differences in gene expression between the two groups are highly structured and separable in a nonlinear space. This indicates that gene expression patterns strongly differentiate the disease state, making classification models likely to perform well. If you need further statistical validation, techniques like clustering metrics or supervised classification could quantify this separation.
+
+### 12.6.13 (c) (30 pts)
+
+c.  Your collaborator wants to know which genes differ the most across the two groups. Suggest a way to answer this question, and apply it here.
+
+    **Solution**
+
+    To get the gene difference, we can use a supervised method to identify genes that differ significantly between healthy and diseased samples. First, we label the samples accordingly and then perform a t-test on each gene to compare the two groups. We adjust the resulting p-values for multiple comparisons using the FDR method, and genes with an adjusted p-value below 0.05 are considered significantly different.
+
+    ```{r}
+    # Create a factor variable 
+    class <- factor(rep(c("Healthy", "Diseased"), each = 20))
+
+    # Perform a t-test 
+    pvals <- p.adjust(apply(data, 1, function(v) t.test(v ~ class)$p.value))
+
+    significant_genes <- which(pvals < 0.05)
+    print(significant_genes)
+    ```

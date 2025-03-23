@@ -11,6 +11,7 @@ This repository contains homework assignments for BIOSTAT 212A (Winter 2025).
 | Homework 3 | [hw3.qmd](./hw3/hw3.qmd) | [hw3.html](https://yuranshi.github.io/biostat-212a-homework/hw3/hw3.html) |
 | Homework 4 | [hw4.qmd](./hw4/hw4.qmd) | [hw4.html](https://yuranshi.github.io/biostat-212a-homework/hw4/hw4.html) |
 | Homework 5 | [hw5.qmd](./hw5/hw5.qmd) | [hw5.html](https://yuranshi.github.io/biostat-212a-homework/hw5/hw5.html) |
+| Homework 6 | [hw6.qmd](./hw6/hw6.qmd) | [hw6.html](https://yuranshi.github.io/biostat-212a-homework/hw6/hw6.html) |
 
 ## Usage
 
